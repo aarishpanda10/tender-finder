@@ -43,7 +43,7 @@ def samaja_page_url(d: date, edition_code: str, page: int) -> str:
         f"{ddmmyyyy}-md-{edition_code}-{page}.jpg"
     )
 
-def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 30):
+def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
     for page in range(1, max_pages + 1):
         url = samaja_page_url(d, edition_code, page)
@@ -73,7 +73,7 @@ def sambad_page_url(d: date, edition_code: str, page: int) -> str:
         f"{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
     )
 
-def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 30):
+def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
     for page in range(1, max_pages + 1):
         url = sambad_page_url(d, edition_code, page)
@@ -92,7 +92,7 @@ def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 30):
 # ----------------------------------------------------------------------
 # DHARITRI / PRAMEYA: Web scraping for daily hashes
 # ----------------------------------------------------------------------
-def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 30):
+def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
     try:
         # Fetch the main page HTML
@@ -118,7 +118,7 @@ def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 30):
     except Exception as e:
         st.error(f"Error fetching Dharitri: {e}")
 
-def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 30):
+def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 15):
     session = requests.Session()
     try:
         # Fetch the main page HTML
