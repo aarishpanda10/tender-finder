@@ -1,5 +1,6 @@
 import io
 import re
+import urllib.parse
 from datetime import date
 
 import requests
@@ -59,10 +60,10 @@ def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 30):
         yield page, img
 
 # ----------------------------------------------------------------------
-# SAMBAD: fully working. Direct image URLs discovered via Network tab.
+# SAMBAD: fully working. Direct image URLs, predictable by date.
 # ----------------------------------------------------------------------
 SAMBAD_EDITIONS = {
-    "Bhubaneswar": "hr", # Using the 'hr' code discovered in the URL for Bhubaneswar
+    "Bhubaneswar": "hr",
 }
 
 def sambad_page_url(d: date, edition_code: str, page: int) -> str:
@@ -89,21 +90,60 @@ def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 30):
         yield page, img
 
 # ----------------------------------------------------------------------
-# DHARITRI / PRAMEYA: Require web scraping for daily hashes
+# DHARITRI / PRAMEYA: Web scraping for daily hashes
 # ----------------------------------------------------------------------
-def fetch_dharitri_pages(d: date, edition_code: str):
-    return
-    yield 
+def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 30):
+    session = requests.Session()
+    try:
+        # Fetch the main page HTML
+        resp = session.get("https://dharitriepaper.in/", timeout=15)
+        
+        # Search the HTML for the hashed image links
+        matches = re.findall(r'https?%3A%2F%2Fdharitriepaper\.in%2Fuploads%2Fepaper%2F[^&"\']+', resp.text)
+        matches += re.findall(r'https?://dharitriepaper\.in/uploads/epaper/[^"\']+', resp.text)
+        
+        # Clean and remove duplicates
+        image_urls = []
+        for m in set(matches):
+            clean_url = urllib.parse.unquote(m)
+            if clean_url not in image_urls:
+                image_urls.append(clean_url)
+        
+        # Download the images
+        for page, img_url in enumerate(image_urls[:max_pages], start=1):
+            img_resp = session.get(img_url, timeout=15)
+            if img_resp.status_code == 200:
+                img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+                yield page, img
+    except Exception as e:
+        st.error(f"Error fetching Dharitri: {e}")
 
-def fetch_prameya_pages(d: date, edition_code: str):
-    return
-    yield 
+def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 30):
+    session = requests.Session()
+    try:
+        # Fetch the main page HTML
+        resp = session.get("https://www.prameyaepaper.com/", timeout=15)
+        
+        # Search the HTML for the hashed .webp image links
+        matches = re.findall(r'https://img\.prameyaepaper\.com/FilesUpload/[^"\']+\.webp', resp.text)
+        
+        # Remove duplicates while keeping page order
+        image_urls = list(dict.fromkeys(matches))
+        
+        # Download the images
+        for page, img_url in enumerate(image_urls[:max_pages], start=1):
+            img_resp = session.get(img_url, timeout=15)
+            if img_resp.status_code == 200:
+                img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+                yield page, img
+    except Exception as e:
+        st.error(f"Error fetching Prameya: {e}")
 
 PAPERS = {
     "Samaja": {"editions": SAMAJA_EDITIONS, "fetch": fetch_samaja_pages, "ready": True},
     "Sambad": {"editions": SAMBAD_EDITIONS, "fetch": fetch_sambad_pages, "ready": True},
-    "Dharitri": {"editions": {}, "fetch": fetch_dharitri_pages, "ready": False},
-    "Prameya": {"editions": {}, "fetch": fetch_prameya_pages, "ready": False},
+    "Dharitri": {"editions": {"Bhubaneswar": "bbsr"}, "fetch": fetch_dharitri_pages, "ready": True},
+    "Prameya": {"editions": {"Bhubaneswar": "bbsr"}, "fetch": fetch_prameya_pages, "ready": True},
 }
 
 # ----------------------------------------------------------------------
@@ -161,7 +201,7 @@ with col2:
     selected_papers = st.multiselect(
         "Newspapers",
         options=list(PAPERS.keys()),
-        default=["Samaja", "Sambad"],
+        default=["Samaja", "Sambad", "Dharitri", "Prameya"],
     )
 
 edition_choice = st.selectbox("Edition (city)", options=list(SAMAJA_EDITIONS.keys()), index=1)
