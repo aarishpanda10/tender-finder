@@ -24,25 +24,26 @@ SERVICE_WORDS = [
 ]
 
 # ----------------------------------------------------------------------
-# SAMAJA: Direct image URLs, predictable by date.
+# STATE MANAGEMENT (Crucial for Accept/Reject buttons)
+# ----------------------------------------------------------------------
+if 'search_completed' not in st.session_state:
+    st.session_state.search_completed = False
+if 'found_matches' not in st.session_state:
+    st.session_state.found_matches = []
+
+# ----------------------------------------------------------------------
+# NEWSPAPER FETCHING LOGIC
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
-    "Cuttack": "ct",
-    "Bhubaneswar": "bh",
-    "Sambalpur": "sa",
-    "Balasore": "ba",
-    "Berhampur": "br",
-    "Rourkela": "ro",
-    "Angul": "an",
-    "Koraput": "ko",
+    "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
+    "Balasore": "ba", "Berhampur": "br", "Rourkela": "ro",
+    "Angul": "an", "Koraput": "ko",
 }
+SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 
 def samaja_page_url(d: date, edition_code: str, page: int) -> str:
     ddmmyyyy = d.strftime("%d%m%Y")
-    return (
-        f"https://www.samajaepaper.in/epaperimages////{ddmmyyyy}////"
-        f"{ddmmyyyy}-md-{edition_code}-{page}.jpg"
-    )
+    return f"https://www.samajaepaper.in/epaperimages////{ddmmyyyy}////{ddmmyyyy}-md-{edition_code}-{page}.jpg"
 
 def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
@@ -50,29 +51,13 @@ def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 12):
         url = samaja_page_url(d, edition_code, page)
         try:
             resp = session.get(url, timeout=15)
-        except requests.RequestException:
-            break
-        if resp.status_code != 200 or len(resp.content) < 2000:
-            break
-        try:
-            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-        except Exception:
-            break
-        yield page, img
-
-# ----------------------------------------------------------------------
-# SAMBAD: Direct image URLs, predictable by date.
-# ----------------------------------------------------------------------
-SAMBAD_EDITIONS = {
-    "Bhubaneswar": "hr",
-}
+            if resp.status_code != 200 or len(resp.content) < 2000: break
+            yield page, Image.open(io.BytesIO(resp.content)).convert("RGB")
+        except Exception: break
 
 def sambad_page_url(d: date, edition_code: str, page: int) -> str:
     ddmmyyyy = d.strftime("%d%m%Y")
-    return (
-        f"https://sambadepaper.com/epaperimages//{ddmmyyyy}//"
-        f"{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
-    )
+    return f"https://sambadepaper.com/epaperimages//{ddmmyyyy}//{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
 
 def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
@@ -80,40 +65,185 @@ def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 12):
         url = sambad_page_url(d, edition_code, page)
         try:
             resp = session.get(url, timeout=15)
-        except requests.RequestException:
-            break
-        if resp.status_code != 200 or len(resp.content) < 2000:
-            break
-        try:
-            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-        except Exception:
-            break
-        yield page, img
+            if resp.status_code != 200 or len(resp.content) < 2000: break
+            yield page, Image.open(io.BytesIO(resp.content)).convert("RGB")
+        except Exception: break
 
-# ----------------------------------------------------------------------
-# DHARITRI / PRAMEYA: Web scraping for daily hashes
-# ----------------------------------------------------------------------
 def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 12):
     session = requests.Session()
     try:
-        # Fetch the main page HTML
         resp = session.get("https://dharitriepaper.in/", timeout=15)
-        
-        # Search the HTML for the hashed image links
         matches = re.findall(r'https?%3A%2F%2Fdharitriepaper\.in%2Fuploads%2Fepaper%2F[^&"\']+', resp.text)
         matches += re.findall(r'https?://dharitriepaper\.in/uploads/epaper/[^"\']+', resp.text)
         
-        # Clean and remove duplicates
         image_urls = []
         for m in set(matches):
             clean_url = urllib.parse.unquote(m)
-            if clean_url not in image_urls:
-                image_urls.append(clean_url)
-        
-        # Download the images
+            if clean_url not in image_urls: image_urls.append(clean_url)
+            
         for page, img_url in enumerate(image_urls[:max_pages], start=1):
             img_resp = session.get(img_url, timeout=15)
             if img_resp.status_code == 200:
-                img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-                yield page, img
+                yield page, Image.open(io.BytesIO(img_resp.content)).convert("RGB")
     except Exception as e:
+        st.error(f"Error fetching Dharitri: {e}")
+
+def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 12):
+    session = requests.Session()
+    try:
+        resp = session.get("https://www.prameyaepaper.com/", timeout=15)
+        matches = re.findall(r'https://img\.prameyaepaper\.com/FilesUpload/[^"\']+\.webp', resp.text)
+        image_urls = list(dict.fromkeys(matches))
+        
+        for page, img_url in enumerate(image_urls[:max_pages], start=1):
+            img_resp = session.get(img_url, timeout=15)
+            if img_resp.status_code == 200:
+                yield page, Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+    except Exception as e:
+        st.error(f"Error fetching Prameya: {e}")
+
+PAPERS = {
+    "Samaja": {"editions": SAMAJA_EDITIONS, "fetch": fetch_samaja_pages, "ready": True},
+    "Sambad": {"editions": SAMBAD_EDITIONS, "fetch": fetch_sambad_pages, "ready": True},
+    "Dharitri": {"editions": {"Bhubaneswar": "bbsr"}, "fetch": fetch_dharitri_pages, "ready": True},
+    "Prameya": {"editions": {"Bhubaneswar": "bbsr"}, "fetch": fetch_prameya_pages, "ready": True},
+}
+
+# ----------------------------------------------------------------------
+# OCR & IMAGE CROPPING
+# ----------------------------------------------------------------------
+def ocr_page(img: Image.Image):
+    enhancer = ImageEnhance.Contrast(img)
+    img_contrast = enhancer.enhance(2.0)
+    text = pytesseract.image_to_string(img_contrast, lang="eng")
+    data = pytesseract.image_to_data(img_contrast, lang="eng", output_type=Output.DICT)
+    return text.upper(), data
+
+def find_matches(text_upper: str):
+    hit_tender = [w for w in TENDER_WORDS if w in text_upper]
+    hit_service = [w for w in SERVICE_WORDS if w in text_upper]
+    if (hit_tender and hit_service) or hit_service:
+        return hit_tender or ["NOTICE"], hit_service
+    return None, None
+
+def crop_around_keywords(img: Image.Image, data: dict, keywords: list):
+    xs1, ys1, xs2, ys2 = [], [], [], []
+    n = len(data.get("text", []))
+    for i in range(n):
+        word = (data["text"][i] or "").strip().upper()
+        if not word: continue
+        if any(k in word or word in k for k in keywords if len(k) <= 20):
+            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+            xs1.append(x); ys1.append(y); xs2.append(x + w); ys2.append(y + h)
+            
+    if not xs1: return img  
+    
+    # Massive padding added here to capture the full tender block advertisement
+    left = max(min(xs1) - 200, 0)
+    top = max(min(ys1) - 250, 0)
+    right = min(max(xs2) + 200, img.width)
+    bottom = min(max(ys2) + 800, img.height)
+    
+    if right - left < 100 or bottom - top < 100:
+        return img
+    return img.crop((left, top, right, bottom))
+
+# ----------------------------------------------------------------------
+# UI & APPLICATION FLOW
+# ----------------------------------------------------------------------
+st.set_page_config(page_title="Odisha Tender Finder", page_icon="📰", layout="centered")
+st.title("📰 Odisha Newspaper Tender Finder")
+
+col1, col2 = st.columns(2)
+with col1:
+    selected_date = st.date_input("Edition date", value=date.today())
+with col2:
+    selected_papers = st.multiselect("Newspapers", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri", "Prameya"])
+edition_choice = st.selectbox("Edition (city)", options=list(SAMAJA_EDITIONS.keys()), index=1)
+
+# The Search Phase
+if st.button("🔍 Search for Tenders", type="primary", use_container_width=True):
+    # Clear old results
+    st.session_state.found_matches = []
+    st.session_state.search_completed = False
+    
+    progress = st.progress(0.0, text="Starting scan...")
+    
+    for paper in selected_papers:
+        info = PAPERS[paper]
+        edition_code = info["editions"].get(edition_choice)
+        if edition_code is None: continue
+        
+        pages = list(info["fetch"](selected_date, edition_code))
+        total = len(pages) if pages else 1
+        
+        for idx, (page_num, img) in enumerate(pages, start=1):
+            progress.progress(idx / total, text=f"Scanning {paper} - Page {page_num}...")
+            try:
+                text_upper, data = ocr_page(img)
+                tender_hits, service_hits = find_matches(text_upper)
+                
+                if tender_hits:
+                    crop = crop_around_keywords(img, data, tender_hits + service_hits)
+                    
+                    # Convert cropped image to downloadable bytes
+                    buf = io.BytesIO()
+                    crop.save(buf, format="JPEG", quality=95)
+                    img_bytes = buf.getvalue()
+                    
+                    # Save the result to session state so it doesn't disappear
+                    st.session_state.found_matches.append({
+                        "paper": paper,
+                        "page": page_num,
+                        "crop": crop,
+                        "bytes": img_bytes,
+                        "filename": f"{paper}_{edition_choice}_{selected_date}_p{page_num}.jpg"
+                    })
+            except Exception:
+                continue
+                
+    progress.empty()
+    st.session_state.search_completed = True
+    st.rerun()
+
+# The Review Phase (Accept/Reject UI)
+if st.session_state.search_completed:
+    if len(st.session_state.found_matches) == 0:
+        st.success("Done. No matching notices found in the selected papers.")
+    else:
+        st.success(f"Found {len(st.session_state.found_matches)} potential tenders!")
+        st.divider()
+        
+        for i, match in enumerate(st.session_state.found_matches):
+            st.subheader(f"📄 {match['paper']} — Page {match['page']}")
+            st.image(match['crop'], use_container_width=True)
+            
+            # Setup dynamic state for each individual tender's Accept/Reject status
+            status_key = f"status_{i}"
+            if status_key not in st.session_state:
+                st.session_state[status_key] = "pending"
+                
+            if st.session_state[status_key] == "pending":
+                c1, c2 = st.columns(2)
+                if c1.button("✅ Accept", key=f"acc_{i}", use_container_width=True):
+                    st.session_state[status_key] = "accepted"
+                    st.rerun()
+                if c2.button("❌ Reject", key=f"rej_{i}", use_container_width=True):
+                    st.session_state[status_key] = "rejected"
+                    st.rerun()
+                    
+            elif st.session_state[status_key] == "accepted":
+                st.info("Status: Accepted")
+                st.download_button(
+                    "📲 Tap here to Share to WhatsApp", 
+                    data=match['bytes'], 
+                    file_name=match['filename'], 
+                    mime="image/jpeg", 
+                    key=f"dl_{i}",
+                    use_container_width=True
+                )
+                
+            elif st.session_state[status_key] == "rejected":
+                st.warning("Bye 👋 (Rejected)")
+                
+            st.divider()
