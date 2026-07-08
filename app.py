@@ -32,7 +32,7 @@ if 'found_matches' not in st.session_state:
     st.session_state.found_matches = []
 
 # ----------------------------------------------------------------------
-# NEWSPAPER FETCHING LOGIC
+# NEWSPAPER FETCHING LOGIC (Defaults to 24 pages for deep scans)
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
     "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
@@ -45,7 +45,7 @@ def samaja_page_url(d: date, edition_code: str, page: int) -> str:
     ddmmyyyy = d.strftime("%d%m%Y")
     return f"https://www.samajaepaper.in/epaperimages////{ddmmyyyy}////{ddmmyyyy}-md-{edition_code}-{page}.jpg"
 
-def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 12):
+def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 24):
     session = requests.Session()
     for page in range(1, max_pages + 1):
         url = samaja_page_url(d, edition_code, page)
@@ -59,7 +59,7 @@ def sambad_page_url(d: date, edition_code: str, page: int) -> str:
     ddmmyyyy = d.strftime("%d%m%Y")
     return f"https://sambadepaper.com/epaperimages//{ddmmyyyy}//{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
 
-def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 12):
+def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 24):
     session = requests.Session()
     for page in range(1, max_pages + 1):
         url = sambad_page_url(d, edition_code, page)
@@ -69,7 +69,7 @@ def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 12):
             yield page, Image.open(io.BytesIO(resp.content)).convert("RGB")
         except Exception: break
 
-def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 12):
+def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 24):
     session = requests.Session()
     try:
         resp = session.get("https://dharitriepaper.in/", timeout=15)
@@ -88,7 +88,7 @@ def fetch_dharitri_pages(d: date, edition_code: str, max_pages: int = 12):
     except Exception as e:
         st.error(f"Error fetching Dharitri: {e}")
 
-def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 12):
+def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 24):
     session = requests.Session()
     try:
         resp = session.get("https://www.prameyaepaper.com/", timeout=15)
@@ -110,14 +110,21 @@ PAPERS = {
 }
 
 # ----------------------------------------------------------------------
-# OCR & IMAGE CROPPING
+# HIGH-RES OCR & IMAGE CROPPING
 # ----------------------------------------------------------------------
 def ocr_page(img: Image.Image):
-    enhancer = ImageEnhance.Contrast(img)
+    # digitally zoom 2x so Tesseract can actually read the tiny font
+    new_size = (img.width * 2, img.height * 2)
+    scaled_img = img.resize(new_size, Image.Resampling.LANCZOS)
+    
+    enhancer = ImageEnhance.Contrast(scaled_img)
     img_contrast = enhancer.enhance(2.0)
+    
     text = pytesseract.image_to_string(img_contrast, lang="eng")
     data = pytesseract.image_to_data(img_contrast, lang="eng", output_type=Output.DICT)
-    return text.upper(), data
+    
+    # Return the scaled image so our crops match the new coordinates!
+    return text.upper(), data, scaled_img
 
 def find_matches(text_upper: str):
     hit_tender = [w for w in TENDER_WORDS if w in text_upper]
@@ -138,18 +145,18 @@ def crop_around_keywords(img: Image.Image, data: dict, keywords: list):
             
     if not xs1: return img  
     
-    # Massive padding added here to capture the full tender block advertisement
-    left = max(min(xs1) - 200, 0)
-    top = max(min(ys1) - 250, 0)
-    right = min(max(xs2) + 200, img.width)
-    bottom = min(max(ys2) + 800, img.height)
+    # Doubled the padding because the image is 2x larger now
+    left = max(min(xs1) - 400, 0)
+    top = max(min(ys1) - 500, 0)
+    right = min(max(xs2) + 400, img.width)
+    bottom = min(max(ys2) + 1200, img.height)
     
     if right - left < 100 or bottom - top < 100:
         return img
     return img.crop((left, top, right, bottom))
 
 # ----------------------------------------------------------------------
-# UI & APPLICATION FLOW
+# UI & APPLICATION FLOW (Memory-Safe Loop)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Odisha Tender Finder", page_icon="📰", layout="centered")
 st.title("📰 Odisha Newspaper Tender Finder")
@@ -161,9 +168,7 @@ with col2:
     selected_papers = st.multiselect("Newspapers", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri", "Prameya"])
 edition_choice = st.selectbox("Edition (city)", options=list(SAMAJA_EDITIONS.keys()), index=1)
 
-# The Search Phase
 if st.button("🔍 Search for Tenders", type="primary", use_container_width=True):
-    # Clear old results
     st.session_state.found_matches = []
     st.session_state.search_completed = False
     
@@ -174,24 +179,24 @@ if st.button("🔍 Search for Tenders", type="primary", use_container_width=True
         edition_code = info["editions"].get(edition_choice)
         if edition_code is None: continue
         
-        pages = list(info["fetch"](selected_date, edition_code))
-        total = len(pages) if pages else 1
+        max_p = 24
+        # Process lazily to save memory!
+        pages_generator = info["fetch"](selected_date, edition_code, max_pages=max_p)
         
-        for idx, (page_num, img) in enumerate(pages, start=1):
-            progress.progress(idx / total, text=f"Scanning {paper} - Page {page_num}...")
+        for idx, (page_num, img) in enumerate(pages_generator, start=1):
+            progress.progress(idx / max_p, text=f"Scanning {paper} - Page {page_num}...")
             try:
-                text_upper, data = ocr_page(img)
+                # Use the new high-res scaled image
+                text_upper, data, scaled_img = ocr_page(img)
                 tender_hits, service_hits = find_matches(text_upper)
                 
                 if tender_hits:
-                    crop = crop_around_keywords(img, data, tender_hits + service_hits)
+                    crop = crop_around_keywords(scaled_img, data, tender_hits + service_hits)
                     
-                    # Convert cropped image to downloadable bytes
                     buf = io.BytesIO()
                     crop.save(buf, format="JPEG", quality=95)
                     img_bytes = buf.getvalue()
                     
-                    # Save the result to session state so it doesn't disappear
                     st.session_state.found_matches.append({
                         "paper": paper,
                         "page": page_num,
@@ -218,7 +223,6 @@ if st.session_state.search_completed:
             st.subheader(f"📄 {match['paper']} — Page {match['page']}")
             st.image(match['crop'], use_container_width=True)
             
-            # Setup dynamic state for each individual tender's Accept/Reject status
             status_key = f"status_{i}"
             if status_key not in st.session_state:
                 st.session_state[status_key] = "pending"
