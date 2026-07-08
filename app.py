@@ -11,7 +11,6 @@ from pytesseract import Output
 # ----------------------------------------------------------------------
 # CONFIG: keywords we're hunting for
 # ----------------------------------------------------------------------
-# A page is flagged only if it contains AT LEAST ONE word from EACH group.
 TENDER_WORDS = [
     "TENDER", "CORRIGENDUM", "NIT", "NOTICE INVITING TENDER",
     "E-TENDER", "E TENDER", "EXPRESSION OF INTEREST", "EOI",
@@ -44,7 +43,6 @@ def samaja_page_url(d: date, edition_code: str, page: int) -> str:
     )
 
 def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 30):
-    """Yields (page_number, PIL.Image) for every page that actually exists."""
     session = requests.Session()
     for page in range(1, max_pages + 1):
         url = samaja_page_url(d, edition_code, page)
@@ -53,7 +51,6 @@ def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 30):
         except requests.RequestException:
             break
         if resp.status_code != 200 or len(resp.content) < 2000:
-            # no more pages, or a placeholder/error image
             break
         try:
             img = Image.open(io.BytesIO(resp.content)).convert("RGB")
@@ -62,31 +59,50 @@ def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 30):
         yield page, img
 
 # ----------------------------------------------------------------------
-# DHARITRI / SAMBAD / PRAMEYA: not wired up yet.
-# Each of these sites needs its own small "recipe" to find the day's
-# page-image links (their structure isn't a simple date-based URL like
-# Samaja's). Placeholders below so the app runs and is easy to extend.
+# SAMBAD: fully working. Direct image URLs discovered via Network tab.
+# ----------------------------------------------------------------------
+SAMBAD_EDITIONS = {
+    "Bhubaneswar": "hr", # Using the 'hr' code discovered in the URL for Bhubaneswar
+}
+
+def sambad_page_url(d: date, edition_code: str, page: int) -> str:
+    ddmmyyyy = d.strftime("%d%m%Y")
+    return (
+        f"https://sambadepaper.com/epaperimages//{ddmmyyyy}//"
+        f"{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
+    )
+
+def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 30):
+    session = requests.Session()
+    for page in range(1, max_pages + 1):
+        url = sambad_page_url(d, edition_code, page)
+        try:
+            resp = session.get(url, timeout=15)
+        except requests.RequestException:
+            break
+        if resp.status_code != 200 or len(resp.content) < 2000:
+            break
+        try:
+            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+        except Exception:
+            break
+        yield page, img
+
+# ----------------------------------------------------------------------
+# DHARITRI / PRAMEYA: Require web scraping for daily hashes
 # ----------------------------------------------------------------------
 def fetch_dharitri_pages(d: date, edition_code: str):
     return
-    yield  # pragma: no cover
-
-def fetch_sambad_pages(d: date, edition_code: str):
-    return
-    yield  # pragma: no cover
+    yield 
 
 def fetch_prameya_pages(d: date, edition_code: str):
     return
-    yield  # pragma: no cover
+    yield 
 
 PAPERS = {
-    "Samaja": {
-        "editions": SAMAJA_EDITIONS,
-        "fetch": fetch_samaja_pages,
-        "ready": True,
-    },
+    "Samaja": {"editions": SAMAJA_EDITIONS, "fetch": fetch_samaja_pages, "ready": True},
+    "Sambad": {"editions": SAMBAD_EDITIONS, "fetch": fetch_sambad_pages, "ready": True},
     "Dharitri": {"editions": {}, "fetch": fetch_dharitri_pages, "ready": False},
-    "Sambad": {"editions": {}, "fetch": fetch_sambad_pages, "ready": False},
     "Prameya": {"editions": {}, "fetch": fetch_prameya_pages, "ready": False},
 }
 
@@ -94,8 +110,6 @@ PAPERS = {
 # OCR + matching
 # ----------------------------------------------------------------------
 def ocr_page(img: Image.Image):
-    """Returns (full_text, word_boxes) where word_boxes is the raw
-    pytesseract data dict (used later for cropping)."""
     text = pytesseract.image_to_string(img, lang="eng")
     data = pytesseract.image_to_data(img, lang="eng", output_type=Output.DICT)
     return text.upper(), data
@@ -108,8 +122,6 @@ def find_matches(text_upper: str):
     return None, None
 
 def crop_around_keywords(img: Image.Image, data: dict, keywords: list, padding: int = 80):
-    """Best-effort crop around the words that matched. Falls back to the
-    full page if we can't confidently locate a region."""
     xs1, ys1, xs2, ys2 = [], [], [], []
     n = len(data.get("text", []))
     for i in range(n):
@@ -123,7 +135,7 @@ def crop_around_keywords(img: Image.Image, data: dict, keywords: list, padding: 
             xs2.append(x + w)
             ys2.append(y + h)
     if not xs1:
-        return img  # fall back to full page
+        return img  
     left = max(min(xs1) - padding, 0)
     top = max(min(ys1) - padding * 3, 0)
     right = min(max(xs2) + padding, img.width)
@@ -149,16 +161,15 @@ with col2:
     selected_papers = st.multiselect(
         "Newspapers",
         options=list(PAPERS.keys()),
-        default=["Samaja"],
+        default=["Samaja", "Sambad"],
     )
 
-edition_choice = st.selectbox("Edition (city)", options=list(SAMAJA_EDITIONS.keys()), index=0)
+edition_choice = st.selectbox("Edition (city)", options=list(SAMAJA_EDITIONS.keys()), index=1)
 
 not_ready = [p for p in selected_papers if not PAPERS[p]["ready"]]
 if not_ready:
     st.warning(
-        f"{', '.join(not_ready)} isn't connected yet — only Samaja is fully working "
-        f"right now. It'll be added once its page-link pattern is confirmed."
+        f"{', '.join(not_ready)} isn't connected yet. It'll be added once its page-link pattern is confirmed."
     )
 
 go = st.button("🔍 Search for Tenders", type="primary", use_container_width=True)
