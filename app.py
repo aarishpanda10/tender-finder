@@ -14,27 +14,23 @@ import pytesseract
 from pytesseract import Output
 
 # ----------------------------------------------------------------------
-# 1. PREMIUM UI / UX INJECTION (Glassmorphism & Scrolling 3D BG)
+# 1. PREMIUM UI / UX INJECTION
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Executive Security | Tender Desk", page_icon="🛡️", layout="wide")
 
 st.markdown("""
 <style>
-    /* Animated Scrolling Background */
     @keyframes gradientBG {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
     }
-
     .stApp {
         background: linear-gradient(-45deg, #0a192f, #112240, #233554, #0f2d52);
         background-size: 400% 400%;
         animation: gradientBG 15s ease infinite;
         color: #ffffff;
     }
-
-    /* Floating Glassmorphism Main Container */
     .block-container {
         padding-top: 3rem !important;
         max-width: 1100px;
@@ -47,68 +43,33 @@ st.markdown("""
         margin-top: 2rem;
         margin-bottom: 2rem;
     }
-
-    /* Executive Typography */
     .company-title { 
-        font-family: 'Arial Black', sans-serif; 
-        color: #ffffff; 
-        font-size: 3.2rem; 
-        text-align: center; 
-        margin-bottom: 0px; 
-        padding-bottom: 0px; 
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        font-family: 'Arial Black', sans-serif; color: #ffffff; font-size: 3.2rem; 
+        text-align: center; margin-bottom: 0px; padding-bottom: 0px; letter-spacing: 2px;
+        text-transform: uppercase; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
     .company-subtitle { 
-        color: #e63946; 
-        font-weight: 800; 
-        text-align: center; 
-        font-size: 1.2rem; 
-        margin-top: 5px; 
-        margin-bottom: 3rem; 
-        letter-spacing: 4px;
+        color: #e63946; font-weight: 800; text-align: center; font-size: 1.2rem; 
+        margin-top: 5px; margin-bottom: 3rem; letter-spacing: 4px;
     }
-
-    /* Input Fields Styling */
     div[data-baseweb="select"] > div, input {
-        background-color: rgba(255, 255, 255, 0.9) !important;
-        border-radius: 8px !important;
+        background-color: rgba(255, 255, 255, 0.9) !important; border-radius: 8px !important;
     }
-    
     label { color: #e2e8f0 !important; font-weight: 600 !important; font-size: 1.1rem !important;}
-
-    /* Premium Button */
     div.stButton > button:first-child { 
-        background: linear-gradient(90deg, #e63946 0%, #c1121f 100%);
-        color: #ffffff; 
-        font-weight: 800; 
-        font-size: 1.2rem;
-        border-radius: 12px; 
-        border: none; 
-        padding: 0.75rem 2rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+        background: linear-gradient(90deg, #e63946 0%, #c1121f 100%); color: #ffffff; 
+        font-weight: 800; font-size: 1.2rem; border-radius: 12px; border: none; padding: 0.75rem 2rem;
+        transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
     }
     div.stButton > button:first-child:hover { 
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.6);
-        color: white;
+        transform: translateY(-2px); box-shadow: 0 6px 20px rgba(230, 57, 70, 0.6); color: white;
     }
-
-    /* Result Cards */
     div[data-testid="stExpander"] { 
-        background: rgba(15, 45, 82, 0.8) !important; 
-        border-radius: 12px; 
-        border: 1px solid rgba(255, 255, 255, 0.2); 
-        color: white !important;
+        background: rgba(15, 45, 82, 0.8) !important; border-radius: 12px; 
+        border: 1px solid rgba(255, 255, 255, 0.2); color: white !important;
     }
     div[data-testid="stExpander"] p { color: #f1f5f9; }
-    
-    /* Progress Bar */
-    .stProgress > div > div > div > div {
-        background-color: #e63946;
-    }
+    .stProgress > div > div > div > div { background-color: #e63946; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -137,7 +98,7 @@ SERVICE_WORDS = [
 ]
 
 # ----------------------------------------------------------------------
-# 3. FAST SCRAPING LOGIC
+# 3. HIGH-SPEED SCRAPING (Skips first 3 and last 3 pages)
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
     "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
@@ -145,33 +106,39 @@ SAMAJA_EDITIONS = {
     "Angul-Dhenkanal": "an", "Koraput": "ko",
 }
 
-def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 15):
+def fetch_samaja_pages(d: date, edition_code: str):
     session = requests.Session()
-    out = []
-    for page in range(1, max_pages + 1):
+    buffer = []
+    # Start on Page 4 (skipping 1, 2, 3)
+    for page in range(4, 45):
         url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page}.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                out.append((page, resp.content))
+                buffer.append((page, resp.content))
+                # Keep exactly 3 pages in the buffer. When the paper ends, those 3 are discarded!
+                if len(buffer) > 3:
+                    yield buffer.pop(0)
             else: break
         except requests.RequestException: break
-    return out
 
 SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 
-def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 15):
+def fetch_sambad_pages(d: date, edition_code: str):
     session = requests.Session()
-    out = []
-    for page in range(1, max_pages + 1):
+    buffer = []
+    # Start on Page 4 (skipping 1, 2, 3)
+    for page in range(4, 45):
         url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page}ss.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                out.append((page, resp.content))
+                buffer.append((page, resp.content))
+                # Keep exactly 3 pages in the buffer.
+                if len(buffer) > 3:
+                    yield buffer.pop(0)
             else: break
         except requests.RequestException: break
-    return out
 
 DHARITRI_EDITIONS = {
     "Bhubaneswar": (4, "bhubaneswar"), "Sambalpur": (5, "sambalpur"),
@@ -179,7 +146,7 @@ DHARITRI_EDITIONS = {
     "Balasore": (8, "balasore"), "Rayagada": (9, "rayagada"), "Upakula": (10, "upakula-odisha"),
 }
 
-def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
+def fetch_dharitri_pages(d: date, edition_tuple):
     city_id, slug = edition_tuple
     session = requests.Session()
     eid = None
@@ -211,11 +178,11 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
             if eid: break
         except requests.RequestException: pass
     
-    if not eid: return []
+    if not eid: return
     
     try:
         resp = session.get(f"https://dharitriepaper.in/edition/{eid}/{slug}", timeout=10)
-        if resp.status_code != 200: return []
+        if resp.status_code != 200: return
         raw_matches = re.findall(r'imageprocessor\?image=([^&"]+)', resp.text)
         seen, ordered_urls = set(), []
         for enc in raw_matches:
@@ -223,15 +190,20 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
             if real_url not in seen and real_url.lower().endswith((".jpg", ".jpeg", ".png")):
                 seen.add(real_url)
                 ordered_urls.append(real_url)
-        out = []
-        for i, img_url in enumerate(ordered_urls[:max_pages], start=1):
+        
+        # Slicing the array to skip the first 3 and last 3 images instantly
+        if len(ordered_urls) > 6:
+            ordered_urls = ordered_urls[3:-3]
+        else:
+            ordered_urls = []
+            
+        for i, img_url in enumerate(ordered_urls, start=4):
             try:
                 r2 = session.get(img_url, timeout=10)
                 if r2.status_code == 200 and len(r2.content) > 2000:
-                    out.append((i, r2.content))
+                    yield (i, r2.content)
             except requests.RequestException: continue
-        return out
-    except requests.RequestException: return []
+    except requests.RequestException: return
 
 PAPERS = {
     "Samaja":   {"editions": SAMAJA_EDITIONS,   "fetch": fetch_samaja_pages,   "ready": True},
@@ -324,14 +296,13 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
     return results
 
 # ----------------------------------------------------------------------
-# 5. WHATSAPP MODULE (Bulletproof String Template)
+# 5. WHATSAPP MODULE
 # ----------------------------------------------------------------------
 def share_button(img: Image.Image, key: str):
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     b64 = base64.b64encode(buf.getvalue()).decode()
     
-    # Using strict string replacement instead of f-strings to completely avoid bracket SyntaxErrors
     html_template = """
     <div style="text-align:center;">
       <button id="share_KEY" style="padding:12px 20px;background:#25D366;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:900;box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
