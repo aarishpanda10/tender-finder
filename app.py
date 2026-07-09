@@ -13,65 +13,103 @@ from PIL import Image, ImageEnhance
 import pytesseract
 from pytesseract import Output
 
-# --- WINDOWS SETUP: TELL PYTHON WHERE TESSERACT IS ---
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
 # ----------------------------------------------------------------------
-# 1. PREMIUM UI / UX INJECTION
+# 1. PREMIUM 3D SCROLLING UI / UX INJECTION
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Executive Security | Tender Desk", page_icon="🛡️", layout="wide")
 
 st.markdown("""
 <style>
-    @keyframes gradientBG {
+    /* 3D Scrolling Parallax Background */
+    @keyframes scrollBackground {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
     }
     .stApp {
-        background: linear-gradient(-45deg, #0a192f, #112240, #233554, #0f2d52);
-        background-size: 400% 400%;
-        animation: gradientBG 15s ease infinite;
+        background: linear-gradient(rgba(10, 25, 47, 0.85), rgba(15, 45, 82, 0.85)), 
+                    url('https://images.unsplash.com/photo-1557597774-9d273605dfa9?q=80&w=2000&auto=format&fit=crop');
+        background-size: 200% 200%;
+        animation: scrollBackground 40s ease-in-out infinite;
         color: #ffffff;
+        background-attachment: fixed;
     }
+    
+    /* Glassmorphism Dashboard Container */
     .block-container {
         padding-top: 3rem !important;
-        max-width: 1100px;
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        max-width: 1200px;
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 15px 35px 0 rgba(0, 0, 0, 0.4);
         margin-top: 2rem;
         margin-bottom: 2rem;
     }
+
+    /* Executive Branding Typography */
     .company-title { 
-        font-family: 'Arial Black', sans-serif; color: #ffffff; font-size: 3.2rem; 
-        text-align: center; margin-bottom: 0px; padding-bottom: 0px; letter-spacing: 2px;
-        text-transform: uppercase; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        font-family: 'Arial Black', sans-serif; 
+        color: #ffffff; 
+        font-size: 3.8rem; 
+        text-align: center; 
+        margin-bottom: 0px; 
+        padding-bottom: 0px; 
+        letter-spacing: 3px;
+        text-transform: uppercase; 
+        text-shadow: 3px 3px 6px rgba(0,0,0,0.6);
     }
     .company-subtitle { 
-        color: #e63946; font-weight: 800; text-align: center; font-size: 1.2rem; 
-        margin-top: 5px; margin-bottom: 3rem; letter-spacing: 4px;
+        color: #e63946; /* Executive Red */
+        font-weight: 900; 
+        text-align: center; 
+        font-size: 1.3rem; 
+        margin-top: 5px; 
+        margin-bottom: 3rem; 
+        letter-spacing: 5px;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
     }
+
+    /* Form Fields & Inputs */
     div[data-baseweb="select"] > div, input {
-        background-color: rgba(255, 255, 255, 0.9) !important; border-radius: 8px !important;
+        background-color: rgba(255, 255, 255, 0.95) !important; 
+        border-radius: 10px !important;
+        border: 2px solid transparent !important;
     }
-    label { color: #e2e8f0 !important; font-weight: 600 !important; font-size: 1.1rem !important;}
+    div[data-baseweb="select"] > div:focus, input:focus {
+        border: 2px solid #e63946 !important;
+    }
+    label { color: #f1f5f9 !important; font-weight: 700 !important; font-size: 1.15rem !important; letter-spacing: 1px;}
+    
+    /* Premium Action Button */
     div.stButton > button:first-child { 
-        background: linear-gradient(90deg, #e63946 0%, #c1121f 100%); color: #ffffff; 
-        font-weight: 800; font-size: 1.2rem; border-radius: 12px; border: none; padding: 0.75rem 2rem;
-        transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+        background: linear-gradient(135deg, #e63946 0%, #a80a13 100%); 
+        color: #ffffff; 
+        font-weight: 900; 
+        font-size: 1.4rem; 
+        border-radius: 12px; 
+        border: 1px solid rgba(255,255,255,0.2); 
+        padding: 0.8rem 2rem;
+        transition: all 0.3s ease; 
+        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.5);
     }
     div.stButton > button:first-child:hover { 
-        transform: translateY(-2px); box-shadow: 0 6px 20px rgba(230, 57, 70, 0.6); color: white;
+        transform: translateY(-3px) scale(1.02); 
+        box-shadow: 0 10px 25px rgba(230, 57, 70, 0.7); 
+        color: white;
     }
+
+    /* Result Cards */
     div[data-testid="stExpander"] { 
-        background: rgba(15, 45, 82, 0.8) !important; border-radius: 12px; 
-        border: 1px solid rgba(255, 255, 255, 0.2); color: white !important;
+        background: rgba(10, 30, 60, 0.7) !important; 
+        border-radius: 14px; 
+        border: 1px solid rgba(255, 255, 255, 0.2); 
+        color: white !important;
+        backdrop-filter: blur(10px);
     }
-    div[data-testid="stExpander"] p { color: #f1f5f9; }
+    div[data-testid="stExpander"] p, div[data-testid="stExpander"] span { color: #e2e8f0; }
     .stProgress > div > div > div > div { background-color: #e63946; }
 </style>
 """, unsafe_allow_html=True)
@@ -101,7 +139,7 @@ SERVICE_WORDS = [
 ]
 
 # ----------------------------------------------------------------------
-# 3. HIGH-SPEED SCRAPING (Skips first 3 and last 3 pages)
+# 3. HIGH-SPEED SCRAPING (Skips first 3 and last 3 pages automatically)
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
     "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
@@ -112,30 +150,42 @@ SAMAJA_EDITIONS = {
 def fetch_samaja_pages(d: date, edition_code: str):
     session = requests.Session()
     buffer = []
-    for page in range(4, 45):
-        url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page}.jpg"
+    page_num = 1
+    while True:
+        url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page_num}.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                buffer.append((page, resp.content))
-                if len(buffer) > 3: yield buffer.pop(0)
-            else: break
-        except requests.RequestException: break
+                if page_num > 3: # Skip first 3 pages
+                    buffer.append((page_num, resp.content))
+                if len(buffer) > 3: # Keep a buffer of 3. Yield the oldest.
+                    yield buffer.pop(0)
+            else:
+                break # End of newspaper, leaving last 3 in buffer (ignored)
+        except requests.RequestException: 
+            break
+        page_num += 1
 
 SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 
 def fetch_sambad_pages(d: date, edition_code: str):
     session = requests.Session()
     buffer = []
-    for page in range(4, 45):
-        url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page}ss.jpg"
+    page_num = 1
+    while True:
+        url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page_num}ss.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                buffer.append((page, resp.content))
-                if len(buffer) > 3: yield buffer.pop(0)
-            else: break
-        except requests.RequestException: break
+                if page_num > 3:
+                    buffer.append((page_num, resp.content))
+                if len(buffer) > 3:
+                    yield buffer.pop(0)
+            else:
+                break
+        except requests.RequestException: 
+            break
+        page_num += 1
 
 DHARITRI_EDITIONS = {
     "Bhubaneswar": (4, "bhubaneswar"), "Sambalpur": (5, "sambalpur"),
@@ -188,6 +238,7 @@ def fetch_dharitri_pages(d: date, edition_tuple):
                 seen.add(real_url)
                 ordered_urls.append(real_url)
         
+        # Instantly slice out the first 3 and last 3 URLs
         if len(ordered_urls) > 6:
             ordered_urls = ordered_urls[3:-3]
         else:
@@ -201,19 +252,42 @@ def fetch_dharitri_pages(d: date, edition_tuple):
             except requests.RequestException: continue
     except requests.RequestException: return
 
+def fetch_prameya_pages(d: date, edition_code: str):
+    session = requests.Session()
+    try:
+        resp = session.get("https://www.prameyaepaper.com/", timeout=10)
+        # Finds all unique image URLs loaded for the paper
+        matches = re.findall(r'https://img\.prameyaepaper\.com/FilesUpload/[^"\']+\.webp', resp.text)
+        urls = list(dict.fromkeys(matches))
+        
+        # Instantly slice out the first 3 and last 3 URLs
+        if len(urls) > 6:
+            urls = urls[3:-3]
+        else:
+            urls = []
+            
+        for i, img_url in enumerate(urls, start=4):
+            try:
+                r2 = session.get(img_url, timeout=10)
+                if r2.status_code == 200 and len(r2.content) > 2000:
+                    yield (i, r2.content)
+            except requests.RequestException: continue
+    except requests.RequestException: return
+
 PAPERS = {
     "Samaja":   {"editions": SAMAJA_EDITIONS,   "fetch": fetch_samaja_pages,   "ready": True},
     "Sambad":   {"editions": SAMBAD_EDITIONS,   "fetch": fetch_sambad_pages,   "ready": True},
     "Dharitri": {"editions": DHARITRI_EDITIONS, "fetch": fetch_dharitri_pages, "ready": True},
+    "Prameya":  {"editions": {"Bhubaneswar": "bbsr"}, "fetch": fetch_prameya_pages, "ready": True},
 }
 
 ALL_CITIES = list(set([city for p in PAPERS.values() for city in p["editions"].keys()]))
 
 # ----------------------------------------------------------------------
-# 4. OPTIMIZED OCR (Memory Safe)
+# 4. OPTIMIZED OCR (Huge Cropping for Entire Tender Blocks)
 # ----------------------------------------------------------------------
 OCR_CONFIG = "--oem 1 --psm 3"
-MAX_OCR_WIDTH = 1000  
+MAX_OCR_WIDTH = 900  # Smaller width drastically increases Cloud speed
 
 def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -249,9 +323,11 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
         
         if xs1:
             inv = 1 / scale
-            pad = 80
-            left, top = max(int(min(xs1) * inv) - pad, 0), max(int(min(ys1) * inv) - pad * 3, 0)
-            right, bottom = min(int(max(xs2) * inv) + pad, img.width), min(int(max(ys2) * inv) + pad * 3, img.height)
+            # MASSIVE PADDING added to grab the entire surrounding tender box!
+            left = max(int(min(xs1) * inv) - 250, 0)
+            top = max(int(min(ys1) * inv) - 450, 0)
+            right = min(int(max(xs2) * inv) + 250, img.width)
+            bottom = min(int(max(ys2) * inv) + 900, img.height)
             crop_img = img.crop((left, top, right, bottom)) if (right - left > 100) else img
         else:
             crop_img = img
@@ -271,7 +347,10 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
         if not PAPERS[paper]["ready"]: continue
         code = PAPERS[paper]["editions"].get(edition_choice)
         if not code: continue
-        for page_num, content in PAPERS[paper]["fetch"](selected_date, code):
+        
+        generator = PAPERS[paper]["fetch"](selected_date, code)
+        # Process dynamically to save RAM
+        for page_num, content in generator:
             jobs.append((paper, page_num, content))
 
     results = []
@@ -285,7 +364,7 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
         except Exception: pass
         finally:
             del content
-            gc.collect() 
+            gc.collect() # Force server to dump memory after EVERY page
             
         progress_cb((i + 1) / total_jobs)
 
@@ -299,37 +378,24 @@ def share_button(img: Image.Image, key: str):
     img.save(buf, format="JPEG", quality=90)
     b64 = base64.b64encode(buf.getvalue()).decode()
     
-    html_template = """
-    <div style="text-align:center;">
-      <button id="share_KEY" style="padding:12px 20px;background:#25D366;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:900;box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
-        <span style="font-size:1.2rem;">📲</span> FORWARD TO WHATSAPP
-      </button>
-      <div id="msg_KEY" style="font-size:12px;color:#cbd5e1;margin-top:8px;"></div>
-    </div>
+    html = f"""
+    <button id="btn_{key}" style="width:100%; padding:14px; background:#25D366; color:white; font-size: 1.1rem; font-weight: 800; border:none; border-radius:10px; cursor:pointer; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
+        📲 DISPATCH TO WHATSAPP
+    </button>
     <script>
-    (function() {
-      const b64 = "B64_DATA";
-      async function doShare() {
-        try {
-          const byteChars = atob(b64);
-          const bytes = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) { bytes[i] = byteChars.charCodeAt(i); }
-          const file = new File([bytes], "executive_tender.jpg", { type: "image/jpeg" });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: "Executive Security Tender Match" });
-          } else {
-            document.getElementById("msg_KEY").innerText = "Web Share API blocked. Use native OS download.";
-          }
-        } catch (e) {}
-      }
-      const btn = document.getElementById("share_KEY");
-      if (btn) { btn.addEventListener("click", doShare); }
-    })();
+    document.getElementById("btn_{key}").onclick = async () => {{
+        const b64 = "{b64}";
+        const byteString = atob(b64);
+        const array = new Uint8Array(byteString.length);
+        for(let i=0; i<byteString.length; i++) array[i] = byteString.charCodeAt(i);
+        const file = new File([array], "executive_tender.jpg", {{type: "image/jpeg"}});
+        if(navigator.share) {{
+            await navigator.share({{files: [file], title: "Executive Security Match"}});
+        }}
+    }};
     </script>
     """
-    
-    html = html_template.replace("KEY", str(key)).replace("B64_DATA", b64)
-    components.html(html, height=75)
+    components.html(html, height=70)
 
 # ----------------------------------------------------------------------
 # 6. DASHBOARD RENDER LOGIC
@@ -339,14 +405,14 @@ if "dismissed" not in st.session_state: st.session_state.dismissed = set()
 
 col1, col2, col3 = st.columns([1,2,1])
 with col1:
-    selected_date = st.date_input("DOCUMENT DATE", value=date.today())
+    selected_date = st.date_input("🗓️ PUBLICATION DATE", value=date.today())
 with col2:
-    selected_papers = st.multiselect("DATA SOURCES", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri"])
+    selected_papers = st.multiselect("📰 ACTIVE SOURCES", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri", "Prameya"])
 with col3:
-    edition_choice = st.selectbox("REGION FOCUS", options=ALL_CITIES, index=0)
+    edition_choice = st.selectbox("📍 REGION FOCUS", options=ALL_CITIES, index=0)
 
 st.markdown("<br>", unsafe_allow_html=True)
-go = st.button("🚀 INITIATE SECURE SCAN", use_container_width=True)
+go = st.button("🚀 INITIATE EXECUTIVE SCAN", use_container_width=True)
 
 if go:
     st.session_state.dismissed = set()
