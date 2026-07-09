@@ -204,7 +204,6 @@ def fetch_dharitri_pages(d: date, edition_tuple):
             if real_url not in seen and real_url.lower().endswith((".jpg", ".jpeg", ".png")):
                 seen.add(real_url); ordered_urls.append(real_url)
         
-        # Skip only the first 2 pages
         if len(ordered_urls) > 2: ordered_urls = ordered_urls[2:]
             
         for i, img_url in enumerate(ordered_urls, start=3):
@@ -222,7 +221,6 @@ def fetch_prameya_pages(d: date, edition_code: str):
         matches = re.findall(r'https://img\.prameyaepaper\.com/FilesUpload/[^"\']+\.webp', resp.text)
         urls = list(dict.fromkeys(matches))
         
-        # Skip only the first 2 pages
         if len(urls) > 2: urls = urls[2:]
             
         for i, img_url in enumerate(urls, start=3):
@@ -243,34 +241,32 @@ PAPERS = {
 ALL_CITIES = list(set([city for p in PAPERS.values() for city in p["editions"].keys()]))
 
 # ----------------------------------------------------------------------
-# 4. HIGH-RESOLUTION OCR (Memory Safe, Huge Cropping)
+# 4. FULL RESOLUTION, GRAYSCALE OCR (Memory Safe, Perfect Reading)
 # ----------------------------------------------------------------------
-OCR_CONFIG = "--oem 1 --psm 3"
-MAX_OCR_WIDTH = 1600  # HIGH RESOLUTION restored to catch tiny tender text!
+OCR_CONFIG = "--oem 3 --psm 3"
 
 def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    # Load original image
+    original_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     
-    if img.width > MAX_OCR_WIDTH:
-        scale = MAX_OCR_WIDTH / img.width
-        small = img.resize((MAX_OCR_WIDTH, int(img.height * scale)), Image.LANCZOS)
-    else:
-        scale = 1.0
-        small = img
+    # CONVERT TO GRAYSCALE (Cuts memory by 66% so we don't have to shrink it!)
+    gray_img = original_img.convert('L')
+    
+    # Aggressive contrast boost to make text pop
+    enhancer = ImageEnhance.Contrast(gray_img)
+    high_contrast = enhancer.enhance(2.5)
 
-    enhancer = ImageEnhance.Contrast(small)
-    small = enhancer.enhance(1.8)
-
-    text_upper = pytesseract.image_to_string(small, lang="eng", config=OCR_CONFIG).upper()
+    # Read the full resolution image
+    text_upper = pytesseract.image_to_string(high_contrast, lang="eng", config=OCR_CONFIG).upper()
     tender_hits = [w for w in TENDER_WORDS if w in text_upper]
     service_hits = [w for w in SERVICE_WORDS if w in text_upper]
     
-    # Improved match logic: Flag if it mentions BOTH, or strongly hits your domain (service_hits)
-    matched = bool(tender_hits and service_hits) or bool(service_hits)
+    # Trigger if it finds ANY hint of a tender OR our target services
+    matched = bool(tender_hits) or bool(service_hits)
 
     crop_img = None
     if matched:
-        data = pytesseract.image_to_data(small, lang="eng", config=OCR_CONFIG, output_type=Output.DICT)
+        data = pytesseract.image_to_data(high_contrast, lang="eng", config=OCR_CONFIG, output_type=Output.DICT)
         
         xs1, ys1, xs2, ys2 = [], [], [], []
         n = len(data.get("text", []))
@@ -283,23 +279,27 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
                 xs1.append(x); ys1.append(y); xs2.append(x + w); ys2.append(y + h)
         
         if xs1:
-            inv = 1 / scale
             # MASSIVE PADDING added to grab the entire surrounding tender box!
-            left = max(int(min(xs1) * inv) - 250, 0)
-            top = max(int(min(ys1) * inv) - 450, 0)
-            right = min(int(max(xs2) * inv) + 250, img.width)
-            bottom = min(int(max(ys2) * inv) + 900, img.height)
-            crop_img = img.crop((left, top, right, bottom)) if (right - left > 100) else img
+            # Uses original image coordinates because we didn't shrink it.
+            left = max(min(xs1) - 400, 0)
+            top = max(min(ys1) - 600, 0)
+            right = min(max(xs2) + 400, original_img.width)
+            bottom = min(max(ys2) + 1200, original_img.height)
+            crop_img = original_img.crop((left, top, right, bottom)) if (right - left > 100) else original_img
         else:
-            crop_img = img
+            crop_img = original_img
 
-    thumb = img.copy()
+    # Clean up memory immediately
+    gray_img.close()
+    high_contrast.close()
+
+    thumb = original_img.copy()
     thumb.thumbnail((250, 250))
     
     return {
         "paper": paper, "page": page_num, "matched": matched, 
         "tender_hits": sorted(set(tender_hits)), "service_hits": sorted(set(service_hits)),
-        "full_img": img, "crop_img": crop_img, "thumb": thumb,
+        "full_img": original_img, "crop_img": crop_img, "thumb": thumb,
     }
 
 def run_search(selected_papers, selected_date, edition_choice, progress_cb):
