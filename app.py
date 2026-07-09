@@ -13,6 +13,9 @@ from PIL import Image, ImageEnhance
 import pytesseract
 from pytesseract import Output
 
+# --- WINDOWS SETUP: TELL PYTHON WHERE TESSERACT IS ---
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
 # ----------------------------------------------------------------------
 # 1. PREMIUM UI / UX INJECTION
 # ----------------------------------------------------------------------
@@ -109,16 +112,13 @@ SAMAJA_EDITIONS = {
 def fetch_samaja_pages(d: date, edition_code: str):
     session = requests.Session()
     buffer = []
-    # Start on Page 4 (skipping 1, 2, 3)
     for page in range(4, 45):
         url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page}.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
                 buffer.append((page, resp.content))
-                # Keep exactly 3 pages in the buffer. When the paper ends, those 3 are discarded!
-                if len(buffer) > 3:
-                    yield buffer.pop(0)
+                if len(buffer) > 3: yield buffer.pop(0)
             else: break
         except requests.RequestException: break
 
@@ -127,16 +127,13 @@ SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 def fetch_sambad_pages(d: date, edition_code: str):
     session = requests.Session()
     buffer = []
-    # Start on Page 4 (skipping 1, 2, 3)
     for page in range(4, 45):
         url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page}ss.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
                 buffer.append((page, resp.content))
-                # Keep exactly 3 pages in the buffer.
-                if len(buffer) > 3:
-                    yield buffer.pop(0)
+                if len(buffer) > 3: yield buffer.pop(0)
             else: break
         except requests.RequestException: break
 
@@ -191,7 +188,6 @@ def fetch_dharitri_pages(d: date, edition_tuple):
                 seen.add(real_url)
                 ordered_urls.append(real_url)
         
-        # Slicing the array to skip the first 3 and last 3 images instantly
         if len(ordered_urls) > 6:
             ordered_urls = ordered_urls[3:-3]
         else:
