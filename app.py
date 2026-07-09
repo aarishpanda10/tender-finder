@@ -61,7 +61,7 @@ st.markdown("""
         text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
     .company-subtitle { 
-        color: #e63946; /* Executive Red Accent */
+        color: #e63946; 
         font-weight: 800; 
         text-align: center; 
         font-size: 1.2rem; 
@@ -183,9 +183,10 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
     city_id, slug = edition_tuple
     session = requests.Session()
     eid = None
-    # Locate Edition ID
+    
     for listing_page in range(1, 3):
-        url = f"https://dharitriepaper.in/category/{city_id}/{slug}{f'/page/{listing_page}' if listing_page > 1 else ''}"
+        suffix = f"/page/{listing_page}" if listing_page > 1 else ""
+        url = f"https://dharitriepaper.in/category/{city_id}/{slug}{suffix}"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code != 200: continue
@@ -212,7 +213,6 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
     
     if not eid: return []
     
-    # Fetch Images
     try:
         resp = session.get(f"https://dharitriepaper.in/edition/{eid}/{slug}", timeout=10)
         if resp.status_code != 200: return []
@@ -245,7 +245,7 @@ ALL_CITIES = list(set([city for p in PAPERS.values() for city in p["editions"].k
 # 4. OPTIMIZED OCR (Memory Safe)
 # ----------------------------------------------------------------------
 OCR_CONFIG = "--oem 1 --psm 3"
-MAX_OCR_WIDTH = 1000  # Smaller width drastically increases speed
+MAX_OCR_WIDTH = 1000  
 
 def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -257,11 +257,9 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
         scale = 1.0
         small = img
 
-    # Contrast boost for accuracy
     enhancer = ImageEnhance.Contrast(small)
     small = enhancer.enhance(1.8)
 
-    # Fast Pass String Match
     text_upper = pytesseract.image_to_string(small, lang="eng", config=OCR_CONFIG).upper()
     tender_hits = [w for w in TENDER_WORDS if w in text_upper]
     service_hits = [w for w in SERVICE_WORDS if w in text_upper]
@@ -269,7 +267,6 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
 
     crop_img = None
     if matched:
-        # Only do heavy data processing IF there is a match
         data = pytesseract.image_to_data(small, lang="eng", config=OCR_CONFIG, output_type=Output.DICT)
         
         xs1, ys1, xs2, ys2 = [], [], [], []
@@ -319,7 +316,6 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
             results.append(res)
         except Exception: pass
         finally:
-            # Force RAM cleanup after every single page to prevent 45% crashes
             del content
             gc.collect() 
             
@@ -328,36 +324,108 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
     return results
 
 # ----------------------------------------------------------------------
-# 5. WHATSAPP MODULE
+# 5. WHATSAPP MODULE (Bulletproof String Template)
 # ----------------------------------------------------------------------
 def share_button(img: Image.Image, key: str):
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     b64 = base64.b64encode(buf.getvalue()).decode()
-    html = f"""
+    
+    # Using strict string replacement instead of f-strings to completely avoid bracket SyntaxErrors
+    html_template = """
     <div style="text-align:center;">
-      <button id="share_{key}" style="
-        padding:12px 20px;background:#25D366;color:white;border:none;
-        border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:900;
-        box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
+      <button id="share_KEY" style="padding:12px 20px;background:#25D366;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:900;box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
         <span style="font-size:1.2rem;">📲</span> FORWARD TO WHATSAPP
       </button>
-      <div id="msg_{key}" style="font-size:12px;color:#cbd5e1;margin-top:8px;"></div>
+      <div id="msg_KEY" style="font-size:12px;color:#cbd5e1;margin-top:8px;"></div>
     </div>
     <script>
-    (function() {{
-      const b64 = "{b64}";
-      async function doShare() {{
-        try {{
+    (function() {
+      const b64 = "B64_DATA";
+      async function doShare() {
+        try {
           const byteChars = atob(b64);
           const bytes = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) {{ bytes[i] = byteChars.charCodeAt(i); }}
-          const file = new File([bytes], "executive_tender.jpg", {{ type: "image/jpeg" }});
-          if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
-            await navigator.share({{ files: [file], title: "Executive Security Tender Match" }});
-          }} else {{
-            document.getElementById("msg_{key}").innerText = "Web Share API blocked. Use native OS download.";
-          }}
-        }} catch (e) {{}}
-      }}
-      document.getElementById("share_{
+          for (let i = 0; i < byteChars.length; i++) { bytes[i] = byteChars.charCodeAt(i); }
+          const file = new File([bytes], "executive_tender.jpg", { type: "image/jpeg" });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: "Executive Security Tender Match" });
+          } else {
+            document.getElementById("msg_KEY").innerText = "Web Share API blocked. Use native OS download.";
+          }
+        } catch (e) {}
+      }
+      const btn = document.getElementById("share_KEY");
+      if (btn) { btn.addEventListener("click", doShare); }
+    })();
+    </script>
+    """
+    
+    html = html_template.replace("KEY", str(key)).replace("B64_DATA", b64)
+    components.html(html, height=75)
+
+# ----------------------------------------------------------------------
+# 6. DASHBOARD RENDER LOGIC
+# ----------------------------------------------------------------------
+if "results" not in st.session_state: st.session_state.results = None
+if "dismissed" not in st.session_state: st.session_state.dismissed = set()
+
+col1, col2, col3 = st.columns([1,2,1])
+with col1:
+    selected_date = st.date_input("DOCUMENT DATE", value=date.today())
+with col2:
+    selected_papers = st.multiselect("DATA SOURCES", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri"])
+with col3:
+    edition_choice = st.selectbox("REGION FOCUS", options=ALL_CITIES, index=0)
+
+st.markdown("<br>", unsafe_allow_html=True)
+go = st.button("🚀 INITIATE SECURE SCAN", use_container_width=True)
+
+if go:
+    st.session_state.dismissed = set()
+    progress = st.progress(0.0, text="Establishing connection to data sources...")
+    st.session_state.results = run_search(
+        selected_papers, selected_date, edition_choice,
+        progress_cb=lambda frac: progress.progress(frac, text=f"Executing OCR extraction... {int(frac*100)}% complete"),
+    )
+    progress.empty()
+
+results = st.session_state.results
+
+if results is not None:
+    if len(results) == 0:
+        st.info("SCAN COMPLETE. NO ACTIVE DOCUMENTS FOUND FOR THIS DATE/REGION.")
+    else:
+        matched = [r for r in results if r["matched"]]
+        visible_matches = [r for r in matched if (r["paper"], r["page"]) not in st.session_state.dismissed]
+
+        if not visible_matches:
+            st.success("✅ DASHBOARD CLEAR. NO RELEVANT CONTRACTS FOUND.")
+        else:
+            st.warning(f"⚠️ TARGET ACQUIRED: {len(visible_matches)} relevant document(s) detected.")
+            for r in visible_matches:
+                key = f"{r['paper']}_{r['page']}"
+                with st.container(border=True):
+                    st.markdown(f"**SOURCE:** {r['paper']} (Page {r['page']}) &nbsp;&nbsp;|&nbsp;&nbsp; **TAGS:** `{', '.join(r['tender_hits'])}`")
+                    st.image(r["crop_img"], use_container_width=True)
+                    
+                    with st.expander("🔍 EXPAND RAW DOCUMENT"):
+                        st.image(r["full_img"], use_container_width=True)
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        share_button(r["crop_img"], key)
+                    with c2:
+                        if st.button("❌ DISMISS LEAD", key=f"reject_{key}", use_container_width=True):
+                            st.session_state.dismissed.add((r["paper"], r["page"]))
+                            st.rerun()
+
+        st.markdown("<br><hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+        with st.expander(f"⚙️ SYSTEM LOG: {len(results)} PAGES VERIFIED"):
+            cols = st.columns(4)
+            for i, r in enumerate(results):
+                with cols[i % 4]:
+                    border = "3px solid #e63946" if r["matched"] else "1px solid rgba(255,255,255,0.1)"
+                    st.markdown(f'<div style="border:{border};border-radius:6px;padding:2px;margin-bottom:8px;background:white;">', unsafe_allow_html=True)
+                    st.image(r["thumb"], caption=f"{r['paper']} p{r['page']}", use_container_width=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
