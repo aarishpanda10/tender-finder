@@ -14,23 +14,28 @@ import pytesseract
 from pytesseract import Output
 
 # ----------------------------------------------------------------------
-# 1. PREMIUM 3D SCROLLING UI / UX INJECTION
+# 1. PREMIUM 3D SLIDING UI / UX INJECTION
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Executive Security | Tender Desk", page_icon="🛡️", layout="wide")
 
 st.markdown("""
 <style>
     /* 3D Scrolling Parallax Background */
-    @keyframes scrollBackground {
+    @keyframes slideBG {
         0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
+        100% { background-position: 100% 50%; }
     }
     .stApp {
-        background: linear-gradient(rgba(10, 25, 47, 0.85), rgba(15, 45, 82, 0.85)), 
-                    url('https://images.unsplash.com/photo-1557597774-9d273605dfa9?q=80&w=2000&auto=format&fit=crop');
-        background-size: 200% 200%;
-        animation: scrollBackground 40s ease-in-out infinite;
+        /* ========================================================================
+           TO USE YOUR OWN IMAGE FROM executivesecurity.in:
+           1. Go to your website, right-click any image, and click "Copy image address"
+           2. Paste that link between the single quotes below, replacing the unsplash link.
+           ========================================================================
+        */
+        background: linear-gradient(rgba(10, 25, 47, 0.88), rgba(15, 45, 82, 0.88)), 
+                    url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2000&auto=format&fit=crop');
+        background-size: cover;
+        animation: slideBG 45s linear infinite alternate;
         color: #ffffff;
         background-attachment: fixed;
     }
@@ -40,8 +45,8 @@ st.markdown("""
         padding-top: 3rem !important;
         max-width: 1200px;
         background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border-radius: 24px;
         border: 1px solid rgba(255, 255, 255, 0.15);
         box-shadow: 0 15px 35px 0 rgba(0, 0, 0, 0.4);
@@ -51,63 +56,36 @@ st.markdown("""
 
     /* Executive Branding Typography */
     .company-title { 
-        font-family: 'Arial Black', sans-serif; 
-        color: #ffffff; 
-        font-size: 3.8rem; 
-        text-align: center; 
-        margin-bottom: 0px; 
-        padding-bottom: 0px; 
-        letter-spacing: 3px;
-        text-transform: uppercase; 
-        text-shadow: 3px 3px 6px rgba(0,0,0,0.6);
+        font-family: 'Arial Black', sans-serif; color: #ffffff; font-size: 3.8rem; 
+        text-align: center; margin-bottom: 0px; padding-bottom: 0px; letter-spacing: 3px;
+        text-transform: uppercase; text-shadow: 3px 3px 6px rgba(0,0,0,0.6);
     }
     .company-subtitle { 
-        color: #e63946; /* Executive Red */
-        font-weight: 900; 
-        text-align: center; 
-        font-size: 1.3rem; 
-        margin-top: 5px; 
-        margin-bottom: 3rem; 
-        letter-spacing: 5px;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        color: #e63946; font-weight: 900; text-align: center; font-size: 1.3rem; 
+        margin-top: 5px; margin-bottom: 3rem; letter-spacing: 5px; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
     }
 
     /* Form Fields & Inputs */
     div[data-baseweb="select"] > div, input {
-        background-color: rgba(255, 255, 255, 0.95) !important; 
-        border-radius: 10px !important;
-        border: 2px solid transparent !important;
+        background-color: rgba(255, 255, 255, 0.95) !important; border-radius: 10px !important; border: 2px solid transparent !important;
     }
-    div[data-baseweb="select"] > div:focus, input:focus {
-        border: 2px solid #e63946 !important;
-    }
+    div[data-baseweb="select"] > div:focus, input:focus { border: 2px solid #e63946 !important; }
     label { color: #f1f5f9 !important; font-weight: 700 !important; font-size: 1.15rem !important; letter-spacing: 1px;}
     
     /* Premium Action Button */
     div.stButton > button:first-child { 
-        background: linear-gradient(135deg, #e63946 0%, #a80a13 100%); 
-        color: #ffffff; 
-        font-weight: 900; 
-        font-size: 1.4rem; 
-        border-radius: 12px; 
-        border: 1px solid rgba(255,255,255,0.2); 
-        padding: 0.8rem 2rem;
-        transition: all 0.3s ease; 
-        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.5);
+        background: linear-gradient(135deg, #e63946 0%, #a80a13 100%); color: #ffffff; 
+        font-weight: 900; font-size: 1.4rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); 
+        padding: 0.8rem 2rem; transition: all 0.3s ease; box-shadow: 0 6px 20px rgba(230, 57, 70, 0.5);
     }
     div.stButton > button:first-child:hover { 
-        transform: translateY(-3px) scale(1.02); 
-        box-shadow: 0 10px 25px rgba(230, 57, 70, 0.7); 
-        color: white;
+        transform: translateY(-3px) scale(1.02); box-shadow: 0 10px 25px rgba(230, 57, 70, 0.7); color: white;
     }
 
     /* Result Cards */
     div[data-testid="stExpander"] { 
-        background: rgba(10, 30, 60, 0.7) !important; 
-        border-radius: 14px; 
-        border: 1px solid rgba(255, 255, 255, 0.2); 
-        color: white !important;
-        backdrop-filter: blur(10px);
+        background: rgba(10, 30, 60, 0.7) !important; border-radius: 14px; 
+        border: 1px solid rgba(255, 255, 255, 0.2); color: white !important; backdrop-filter: blur(10px);
     }
     div[data-testid="stExpander"] p, div[data-testid="stExpander"] span { color: #e2e8f0; }
     .stProgress > div > div > div > div { background-color: #e63946; }
@@ -139,7 +117,7 @@ SERVICE_WORDS = [
 ]
 
 # ----------------------------------------------------------------------
-# 3. HIGH-SPEED SCRAPING (Skips first 3 and last 3 pages automatically)
+# 3. HIGH-SPEED SCRAPING (Skips first 2 pages, reads to the back cover)
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
     "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
@@ -149,42 +127,32 @@ SAMAJA_EDITIONS = {
 
 def fetch_samaja_pages(d: date, edition_code: str):
     session = requests.Session()
-    buffer = []
     page_num = 1
     while True:
         url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page_num}.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                if page_num > 3: # Skip first 3 pages
-                    buffer.append((page_num, resp.content))
-                if len(buffer) > 3: # Keep a buffer of 3. Yield the oldest.
-                    yield buffer.pop(0)
-            else:
-                break # End of newspaper, leaving last 3 in buffer (ignored)
-        except requests.RequestException: 
-            break
+                if page_num > 2: # Safely skip only the front 2 pages
+                    yield (page_num, resp.content)
+            else: break
+        except requests.RequestException: break
         page_num += 1
 
 SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 
 def fetch_sambad_pages(d: date, edition_code: str):
     session = requests.Session()
-    buffer = []
     page_num = 1
     while True:
         url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page_num}ss.jpg"
         try:
             resp = session.get(url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 2000:
-                if page_num > 3:
-                    buffer.append((page_num, resp.content))
-                if len(buffer) > 3:
-                    yield buffer.pop(0)
-            else:
-                break
-        except requests.RequestException: 
-            break
+                if page_num > 2:
+                    yield (page_num, resp.content)
+            else: break
+        except requests.RequestException: break
         page_num += 1
 
 DHARITRI_EDITIONS = {
@@ -219,8 +187,7 @@ def fetch_dharitri_pages(d: date, edition_tuple):
                 if date_match:
                     try:
                         if datetime.strptime(date_match.group(0), "%b %d, %Y").date() == d:
-                            eid = temp_eid
-                            break
+                            eid = temp_eid; break
                     except ValueError: continue
             if eid: break
         except requests.RequestException: pass
@@ -235,16 +202,12 @@ def fetch_dharitri_pages(d: date, edition_tuple):
         for enc in raw_matches:
             real_url = urllib.parse.unquote(enc)
             if real_url not in seen and real_url.lower().endswith((".jpg", ".jpeg", ".png")):
-                seen.add(real_url)
-                ordered_urls.append(real_url)
+                seen.add(real_url); ordered_urls.append(real_url)
         
-        # Instantly slice out the first 3 and last 3 URLs
-        if len(ordered_urls) > 6:
-            ordered_urls = ordered_urls[3:-3]
-        else:
-            ordered_urls = []
+        # Skip only the first 2 pages
+        if len(ordered_urls) > 2: ordered_urls = ordered_urls[2:]
             
-        for i, img_url in enumerate(ordered_urls, start=4):
+        for i, img_url in enumerate(ordered_urls, start=3):
             try:
                 r2 = session.get(img_url, timeout=10)
                 if r2.status_code == 200 and len(r2.content) > 2000:
@@ -256,17 +219,13 @@ def fetch_prameya_pages(d: date, edition_code: str):
     session = requests.Session()
     try:
         resp = session.get("https://www.prameyaepaper.com/", timeout=10)
-        # Finds all unique image URLs loaded for the paper
         matches = re.findall(r'https://img\.prameyaepaper\.com/FilesUpload/[^"\']+\.webp', resp.text)
         urls = list(dict.fromkeys(matches))
         
-        # Instantly slice out the first 3 and last 3 URLs
-        if len(urls) > 6:
-            urls = urls[3:-3]
-        else:
-            urls = []
+        # Skip only the first 2 pages
+        if len(urls) > 2: urls = urls[2:]
             
-        for i, img_url in enumerate(urls, start=4):
+        for i, img_url in enumerate(urls, start=3):
             try:
                 r2 = session.get(img_url, timeout=10)
                 if r2.status_code == 200 and len(r2.content) > 2000:
@@ -284,10 +243,10 @@ PAPERS = {
 ALL_CITIES = list(set([city for p in PAPERS.values() for city in p["editions"].keys()]))
 
 # ----------------------------------------------------------------------
-# 4. OPTIMIZED OCR (Huge Cropping for Entire Tender Blocks)
+# 4. HIGH-RESOLUTION OCR (Memory Safe, Huge Cropping)
 # ----------------------------------------------------------------------
 OCR_CONFIG = "--oem 1 --psm 3"
-MAX_OCR_WIDTH = 900  # Smaller width drastically increases Cloud speed
+MAX_OCR_WIDTH = 1600  # HIGH RESOLUTION restored to catch tiny tender text!
 
 def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -305,7 +264,9 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
     text_upper = pytesseract.image_to_string(small, lang="eng", config=OCR_CONFIG).upper()
     tender_hits = [w for w in TENDER_WORDS if w in text_upper]
     service_hits = [w for w in SERVICE_WORDS if w in text_upper]
-    matched = bool(tender_hits and service_hits)
+    
+    # Improved match logic: Flag if it mentions BOTH, or strongly hits your domain (service_hits)
+    matched = bool(tender_hits and service_hits) or bool(service_hits)
 
     crop_img = None
     if matched:
@@ -349,7 +310,6 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
         if not code: continue
         
         generator = PAPERS[paper]["fetch"](selected_date, code)
-        # Process dynamically to save RAM
         for page_num, content in generator:
             jobs.append((paper, page_num, content))
 
@@ -364,7 +324,7 @@ def run_search(selected_papers, selected_date, edition_choice, progress_cb):
         except Exception: pass
         finally:
             del content
-            gc.collect() # Force server to dump memory after EVERY page
+            gc.collect() # Force server to dump memory after EVERY single page!
             
         progress_cb((i + 1) / total_jobs)
 
