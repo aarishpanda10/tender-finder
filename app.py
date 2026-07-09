@@ -3,42 +3,120 @@ import io
 import re
 import urllib.parse
 from datetime import date, datetime
+import gc
 
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
-from PIL import Image
+from PIL import Image, ImageEnhance
 import pytesseract
 from pytesseract import Output
 
 # ----------------------------------------------------------------------
-# BRANDING & CSS INJECTION (Must be the first Streamlit command)
+# 1. PREMIUM UI / UX INJECTION (Glassmorphism & Scrolling 3D BG)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Executive Security | Tender Desk", page_icon="🛡️", layout="wide")
 
 st.markdown("""
 <style>
-    /* Corporate Branding CSS */
-    .stApp { background-color: #f4f6f9; }
-    .block-container { padding-top: 2rem; max-width: 1000px;}
-    .company-title { font-family: 'Arial Black', sans-serif; color: #0f2d52; font-size: 2.8rem; text-align: center; margin-bottom: 0px; padding-bottom: 0px; letter-spacing: -1px;}
-    .company-subtitle { color: #cc1016; font-weight: bold; text-align: center; font-size: 1.1rem; margin-top: 0px; margin-bottom: 2.5rem; letter-spacing: 2px;}
+    /* Animated Scrolling Background */
+    @keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .stApp {
+        background: linear-gradient(-45deg, #0a192f, #112240, #233554, #0f2d52);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        color: #ffffff;
+    }
+
+    /* Floating Glassmorphism Main Container */
+    .block-container {
+        padding-top: 3rem !important;
+        max-width: 1100px;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Executive Typography */
+    .company-title { 
+        font-family: 'Arial Black', sans-serif; 
+        color: #ffffff; 
+        font-size: 3.2rem; 
+        text-align: center; 
+        margin-bottom: 0px; 
+        padding-bottom: 0px; 
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    .company-subtitle { 
+        color: #e63946; /* Executive Red Accent */
+        font-weight: 800; 
+        text-align: center; 
+        font-size: 1.2rem; 
+        margin-top: 5px; 
+        margin-bottom: 3rem; 
+        letter-spacing: 4px;
+    }
+
+    /* Input Fields Styling */
+    div[data-baseweb="select"] > div, input {
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        border-radius: 8px !important;
+    }
     
-    /* Button styling */
-    div.stButton > button:first-child { background-color: #0f2d52; color: #ffffff; font-weight: bold; border-radius: 6px; border: none; padding: 0.5rem 1rem;}
-    div.stButton > button:first-child:hover { background-color: #cc1016; color: white;}
+    label { color: #e2e8f0 !important; font-weight: 600 !important; font-size: 1.1rem !important;}
+
+    /* Premium Button */
+    div.stButton > button:first-child { 
+        background: linear-gradient(90deg, #e63946 0%, #c1121f 100%);
+        color: #ffffff; 
+        font-weight: 800; 
+        font-size: 1.2rem;
+        border-radius: 12px; 
+        border: none; 
+        padding: 0.75rem 2rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+    }
+    div.stButton > button:first-child:hover { 
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(230, 57, 70, 0.6);
+        color: white;
+    }
+
+    /* Result Cards */
+    div[data-testid="stExpander"] { 
+        background: rgba(15, 45, 82, 0.8) !important; 
+        border-radius: 12px; 
+        border: 1px solid rgba(255, 255, 255, 0.2); 
+        color: white !important;
+    }
+    div[data-testid="stExpander"] p { color: #f1f5f9; }
     
-    /* Card styling */
-    div[data-testid="stExpander"] { background-color: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background-color: #e63946;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='company-title'>EXECUTIVE SECURITY SERVICE</div>", unsafe_allow_html=True)
+st.markdown("<div class='company-title'>🛡️ EXECUTIVE SECURITY</div>", unsafe_allow_html=True)
 st.markdown("<div class='company-subtitle'>AUTOMATED TENDER INTELLIGENCE DESK</div>", unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------
-# CONFIG: expanded keywords for government & private outsourcing
+# 2. KEYWORD CONFIGURATION
 # ----------------------------------------------------------------------
 TENDER_WORDS = [
     "TENDER", "CORRIGENDUM", "NIT", "NOTICE INVITING TENDER",
@@ -47,7 +125,6 @@ TENDER_WORDS = [
     "INVITATION FOR BIDS", "INVITATION OF BIDS", "IFB",
     "ADDENDUM", "TENDER CALL NOTICE", "AWARD OF CONTRACT",
     "SELECTION OF AGENCY", "EMPANELMENT", "BID DOCUMENT",
-    "SELECTION OF AGENCY FOR PROVIDING COMPREHENSIVE FACILITY MANAGEMENT SERVICES",
 ]
 SERVICE_WORDS = [
     "SECURITY", "HOUSEKEEPING", "HOUSE KEEPING", "MANPOWER",
@@ -60,7 +137,7 @@ SERVICE_WORDS = [
 ]
 
 # ----------------------------------------------------------------------
-# NEWSPAPER LOGIC
+# 3. FAST SCRAPING LOGIC
 # ----------------------------------------------------------------------
 SAMAJA_EDITIONS = {
     "Cuttack": "ct", "Bhubaneswar": "bh", "Sambalpur": "sa",
@@ -68,37 +145,31 @@ SAMAJA_EDITIONS = {
     "Angul-Dhenkanal": "an", "Koraput": "ko",
 }
 
-def samaja_page_url(d: date, edition_code: str, page: int) -> str:
-    ddmmyyyy = d.strftime("%d%m%Y")
-    return f"https://www.samajaepaper.in/epaperimages////{ddmmyyyy}////{ddmmyyyy}-md-{edition_code}-{page}.jpg"
-
-def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 24):
+def fetch_samaja_pages(d: date, edition_code: str, max_pages: int = 15):
     session = requests.Session()
     out = []
     for page in range(1, max_pages + 1):
-        url = samaja_page_url(d, edition_code, page)
+        url = f"https://www.samajaepaper.in/epaperimages////{d.strftime('%d%m%Y')}////{d.strftime('%d%m%Y')}-md-{edition_code}-{page}.jpg"
         try:
-            resp = session.get(url, timeout=15)
-            if resp.status_code != 200 or len(resp.content) < 2000: break
-            out.append((page, resp.content))
+            resp = session.get(url, timeout=10)
+            if resp.status_code == 200 and len(resp.content) > 2000:
+                out.append((page, resp.content))
+            else: break
         except requests.RequestException: break
     return out
 
 SAMBAD_EDITIONS = {"Bhubaneswar": "hr"}
 
-def sambad_page_url(d: date, edition_code: str, page: int) -> str:
-    ddmmyyyy = d.strftime("%d%m%Y")
-    return f"https://sambadepaper.com/epaperimages//{ddmmyyyy}//{ddmmyyyy}-md-{edition_code}-{page}ss.jpg"
-
-def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 24):
+def fetch_sambad_pages(d: date, edition_code: str, max_pages: int = 15):
     session = requests.Session()
     out = []
     for page in range(1, max_pages + 1):
-        url = sambad_page_url(d, edition_code, page)
+        url = f"https://sambadepaper.com/epaperimages//{d.strftime('%d%m%Y')}//{d.strftime('%d%m%Y')}-md-{edition_code}-{page}ss.jpg"
         try:
-            resp = session.get(url, timeout=15)
-            if resp.status_code != 200 or len(resp.content) < 2000: break
-            out.append((page, resp.content))
+            resp = session.get(url, timeout=10)
+            if resp.status_code == 200 and len(resp.content) > 2000:
+                out.append((page, resp.content))
+            else: break
         except requests.RequestException: break
     return out
 
@@ -108,47 +179,42 @@ DHARITRI_EDITIONS = {
     "Balasore": (8, "balasore"), "Rayagada": (9, "rayagada"), "Upakula": (10, "upakula-odisha"),
 }
 
-def _find_dharitri_edition_id(d: date, city_id: int, slug: str, session, max_listing_pages: int = 6):
-    for listing_page in range(1, max_listing_pages + 1):
-        url = f"https://dharitriepaper.in/category/{city_id}/{slug}"
-        if listing_page > 1: url += f"/page/{listing_page}"
+def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 15):
+    city_id, slug = edition_tuple
+    session = requests.Session()
+    eid = None
+    # Locate Edition ID
+    for listing_page in range(1, 3):
+        url = f"https://dharitriepaper.in/category/{city_id}/{slug}{f'/page/{listing_page}' if listing_page > 1 else ''}"
         try:
-            resp = session.get(url, timeout=15)
-            if resp.status_code != 200: return None
+            resp = session.get(url, timeout=10)
+            if resp.status_code != 200: continue
             soup = BeautifulSoup(resp.text, "html.parser")
-            links = soup.find_all("a", href=re.compile(rf"/edition/(\d+)/{re.escape(slug)}$"))
-            seen_ids = set()
-            for a in links:
+            for a in soup.find_all("a", href=re.compile(rf"/edition/(\d+)/{re.escape(slug)}$")):
                 m = re.search(r"/edition/(\d+)/", a["href"])
                 if not m: continue
-                eid = m.group(1)
-                if eid in seen_ids: continue
-                seen_ids.add(eid)
+                temp_eid = m.group(1)
                 node = a
                 date_match = None
                 for _ in range(4):
                     if not node.parent: break
                     node = node.parent
-                    text = node.get_text(" ", strip=True)
-                    date_match = re.search(r"[A-Z][a-z]{2} \d{1,2}, \d{4}", text)
+                    date_match = re.search(r"[A-Z][a-z]{2} \d{1,2}, \d{4}", node.get_text(" ", strip=True))
                     if date_match: break
-                if not date_match: continue
-                try:
-                    parsed = datetime.strptime(date_match.group(0), "%b %d, %Y").date()
-                    if parsed == d: return eid
-                except ValueError: continue
-            if not links: break
-        except requests.RequestException: return None
-    return None
-
-def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 24):
-    city_id, slug = edition_tuple
-    session = requests.Session()
-    eid = _find_dharitri_edition_id(d, city_id, slug, session)
-    if eid is None: return []
-    edition_url = f"https://dharitriepaper.in/edition/{eid}/{slug}"
+                if date_match:
+                    try:
+                        if datetime.strptime(date_match.group(0), "%b %d, %Y").date() == d:
+                            eid = temp_eid
+                            break
+                    except ValueError: continue
+            if eid: break
+        except requests.RequestException: pass
+    
+    if not eid: return []
+    
+    # Fetch Images
     try:
-        resp = session.get(edition_url, timeout=20)
+        resp = session.get(f"https://dharitriepaper.in/edition/{eid}/{slug}", timeout=10)
         if resp.status_code != 200: return []
         raw_matches = re.findall(r'imageprocessor\?image=([^&"]+)', resp.text)
         seen, ordered_urls = set(), []
@@ -160,36 +226,30 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 24):
         out = []
         for i, img_url in enumerate(ordered_urls[:max_pages], start=1):
             try:
-                r2 = session.get(img_url, timeout=20)
+                r2 = session.get(img_url, timeout=10)
                 if r2.status_code == 200 and len(r2.content) > 2000:
                     out.append((i, r2.content))
             except requests.RequestException: continue
         return out
     except requests.RequestException: return []
 
-def fetch_prameya_pages(d, edition_code):
-    return []
-
 PAPERS = {
     "Samaja":   {"editions": SAMAJA_EDITIONS,   "fetch": fetch_samaja_pages,   "ready": True},
     "Sambad":   {"editions": SAMBAD_EDITIONS,   "fetch": fetch_sambad_pages,   "ready": True},
     "Dharitri": {"editions": DHARITRI_EDITIONS, "fetch": fetch_dharitri_pages, "ready": True},
-    "Prameya":  {"editions": {},                "fetch": fetch_prameya_pages,  "ready": False},
 }
 
-ALL_CITIES = []
-for _info in PAPERS.values():
-    for _city in _info["editions"]:
-        if _city not in ALL_CITIES: ALL_CITIES.append(_city)
+ALL_CITIES = list(set([city for p in PAPERS.values() for city in p["editions"].keys()]))
 
 # ----------------------------------------------------------------------
-# OCR PIPELINE (Sequential - Fixes the Memory Crash!)
+# 4. OPTIMIZED OCR (Memory Safe)
 # ----------------------------------------------------------------------
-OCR_CONFIG = "--oem 1 --psm 6"
-MAX_OCR_WIDTH = 1500  
+OCR_CONFIG = "--oem 1 --psm 3"
+MAX_OCR_WIDTH = 1000  # Smaller width drastically increases speed
 
 def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    
     if img.width > MAX_OCR_WIDTH:
         scale = MAX_OCR_WIDTH / img.width
         small = img.resize((MAX_OCR_WIDTH, int(img.height * scale)), Image.LANCZOS)
@@ -197,6 +257,11 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
         scale = 1.0
         small = img
 
+    # Contrast boost for accuracy
+    enhancer = ImageEnhance.Contrast(small)
+    small = enhancer.enhance(1.8)
+
+    # Fast Pass String Match
     text_upper = pytesseract.image_to_string(small, lang="eng", config=OCR_CONFIG).upper()
     tender_hits = [w for w in TENDER_WORDS if w in text_upper]
     service_hits = [w for w in SERVICE_WORDS if w in text_upper]
@@ -204,62 +269,66 @@ def process_page(paper, page_num, image_bytes, edition_choice, selected_date):
 
     crop_img = None
     if matched:
+        # Only do heavy data processing IF there is a match
         data = pytesseract.image_to_data(small, lang="eng", config=OCR_CONFIG, output_type=Output.DICT)
-        crop_img = crop_around_keywords(img, data, tender_hits + service_hits, scale)
+        
+        xs1, ys1, xs2, ys2 = [], [], [], []
+        n = len(data.get("text", []))
+        keywords = tender_hits + service_hits
+        for i in range(n):
+            word = (data["text"][i] or "").strip().upper()
+            if not word: continue
+            if any(k in word or word in k for k in keywords if len(k) <= 20):
+                x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+                xs1.append(x); ys1.append(y); xs2.append(x + w); ys2.append(y + h)
+        
+        if xs1:
+            inv = 1 / scale
+            pad = 80
+            left, top = max(int(min(xs1) * inv) - pad, 0), max(int(min(ys1) * inv) - pad * 3, 0)
+            right, bottom = min(int(max(xs2) * inv) + pad, img.width), min(int(max(ys2) * inv) + pad * 3, img.height)
+            crop_img = img.crop((left, top, right, bottom)) if (right - left > 100) else img
+        else:
+            crop_img = img
 
     thumb = img.copy()
-    thumb.thumbnail((220, 220))
+    thumb.thumbnail((250, 250))
+    
     return {
-        "paper": paper, "edition": edition_choice, "date": selected_date, "page": page_num,
-        "matched": matched, "tender_hits": sorted(set(tender_hits)), "service_hits": sorted(set(service_hits)),
+        "paper": paper, "page": page_num, "matched": matched, 
+        "tender_hits": sorted(set(tender_hits)), "service_hits": sorted(set(service_hits)),
         "full_img": img, "crop_img": crop_img, "thumb": thumb,
     }
-
-def crop_around_keywords(img: Image.Image, data: dict, keywords: list, scale: float, padding: int = 80):
-    xs1, ys1, xs2, ys2 = [], [], [], []
-    n = len(data.get("text", []))
-    for i in range(n):
-        word = (data["text"][i] or "").strip().upper()
-        if not word: continue
-        if any(k in word or word in k for k in keywords if len(k) <= 20):
-            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-            xs1.append(x); ys1.append(y); xs2.append(x + w); ys2.append(y + h)
-    if not xs1: return img
-    inv = 1 / scale
-    left, top = max(int(min(xs1) * inv) - padding, 0), max(int(min(ys1) * inv) - padding * 3, 0)
-    right, bottom = min(int(max(xs2) * inv) + padding, img.width), min(int(max(ys2) * inv) + padding * 3, img.height)
-    if right - left < 100 or bottom - top < 100: return img
-    return img.crop((left, top, right, bottom))
 
 def run_search(selected_papers, selected_date, edition_choice, progress_cb):
     jobs = []
     for paper in selected_papers:
-        info = PAPERS[paper]
-        if not info["ready"]: continue
-        code = info["editions"].get(edition_choice)
-        if code is None: continue
-        pages = info["fetch"](selected_date, code)
-        for page_num, content in pages:
+        if not PAPERS[paper]["ready"]: continue
+        code = PAPERS[paper]["editions"].get(edition_choice)
+        if not code: continue
+        for page_num, content in PAPERS[paper]["fetch"](selected_date, code):
             jobs.append((paper, page_num, content))
 
     results = []
     if not jobs: return []
 
-    # Replaced ThreadPoolExecutor with a stable, single-file loop to prevent memory crashes!
     total_jobs = len(jobs)
     for i, (paper, page_num, content) in enumerate(jobs):
         try:
             res = process_page(paper, page_num, content, edition_choice, selected_date)
             results.append(res)
-        except Exception:
-            pass
+        except Exception: pass
+        finally:
+            # Force RAM cleanup after every single page to prevent 45% crashes
+            del content
+            gc.collect() 
+            
         progress_cb((i + 1) / total_jobs)
 
-    results.sort(key=lambda r: (r["paper"], r["page"]))
     return results
 
 # ----------------------------------------------------------------------
-# WhatsApp Sharing
+# 5. WHATSAPP MODULE
 # ----------------------------------------------------------------------
 def share_button(img: Image.Image, key: str):
     buf = io.BytesIO()
@@ -268,11 +337,12 @@ def share_button(img: Image.Image, key: str):
     html = f"""
     <div style="text-align:center;">
       <button id="share_{key}" style="
-        padding:10px 18px;background:#25D366;color:white;border:none;
-        border-radius:6px;font-size:15px;cursor:pointer;width:100%;font-weight:bold;">
-        📲 Send to WhatsApp
+        padding:12px 20px;background:#25D366;color:white;border:none;
+        border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:900;
+        box-shadow: 0 4px 10px rgba(37, 211, 102, 0.4);">
+        <span style="font-size:1.2rem;">📲</span> FORWARD TO WHATSAPP
       </button>
-      <div id="msg_{key}" style="font-size:12px;color:#888;margin-top:4px;"></div>
+      <div id="msg_{key}" style="font-size:12px;color:#cbd5e1;margin-top:8px;"></div>
     </div>
     <script>
     (function() {{
@@ -282,81 +352,12 @@ def share_button(img: Image.Image, key: str):
           const byteChars = atob(b64);
           const bytes = new Uint8Array(byteChars.length);
           for (let i = 0; i < byteChars.length; i++) {{ bytes[i] = byteChars.charCodeAt(i); }}
-          const file = new File([bytes], "tender.jpg", {{ type: "image/jpeg" }});
+          const file = new File([bytes], "executive_tender.jpg", {{ type: "image/jpeg" }});
           if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
-            await navigator.share({{ files: [file], title: "Tender notice" }});
+            await navigator.share({{ files: [file], title: "Executive Security Tender Match" }});
           }} else {{
-            document.getElementById("msg_{key}").innerText = "Sharing isn't supported on this device. Use download button.";
+            document.getElementById("msg_{key}").innerText = "Web Share API blocked. Use native OS download.";
           }}
         }} catch (e) {{}}
       }}
-      document.getElementById("share_{key}").addEventListener("click", doShare);
-    }})();
-    </script>
-    """
-    components.html(html, height=70)
-
-# ----------------------------------------------------------------------
-# UI Logic
-# ----------------------------------------------------------------------
-if "results" not in st.session_state: st.session_state.results = None
-if "dismissed" not in st.session_state: st.session_state.dismissed = set()
-
-with st.container(border=True):
-    col1, col2, col3 = st.columns([1,2,1])
-    with col1:
-        selected_date = st.date_input("Date", value=date.today())
-    with col2:
-        selected_papers = st.multiselect("Active Sources", options=list(PAPERS.keys()), default=["Samaja", "Sambad", "Dharitri"])
-    with col3:
-        edition_choice = st.selectbox("Region", options=ALL_CITIES, index=0)
-
-    go = st.button("🚀 INITIATE SCAN", use_container_width=True)
-
-if go:
-    st.session_state.dismissed = set()
-    progress = st.progress(0.0, text="System initializing...")
-    st.session_state.results = run_search(
-        selected_papers, selected_date, edition_choice,
-        progress_cb=lambda frac: progress.progress(frac, text=f"Processing documents... {int(frac*100)}% complete"),
-    )
-    progress.empty()
-
-results = st.session_state.results
-
-if results is not None:
-    if len(results) == 0:
-        st.info("Scan complete. No active documents found for this criteria.")
-    else:
-        matched = [r for r in results if r["matched"]]
-        visible_matches = [r for r in matched if (r["paper"], r["page"]) not in st.session_state.dismissed]
-
-        if not visible_matches:
-            st.success("✅ Dashboard Clear. No relevant tenders found today.")
-        else:
-            st.error(f"⚠️ Alert: {len(visible_matches)} relevant document(s) detected.")
-            for r in visible_matches:
-                key = f"{r['paper']}_{r['page']}"
-                with st.container(border=True):
-                    st.markdown(f"**SOURCE:** {r['paper']} (Page {r['page']}) | **TAGS:** `{', '.join(r['tender_hits'])}`")
-                    st.image(r["crop_img"], use_container_width=True)
-                    
-                    with st.expander("Expand Full Document"):
-                        st.image(r["full_img"], use_container_width=True)
-
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        share_button(r["crop_img"], key)
-                    with c2:
-                        if st.button("❌ Dismiss", key=f"reject_{key}", use_container_width=True):
-                            st.session_state.dismissed.add((r["paper"], r["page"]))
-                            st.rerun()
-
-        with st.expander(f"System Log: {len(results)} pages scanned"):
-            cols = st.columns(4)
-            for i, r in enumerate(results):
-                with cols[i % 4]:
-                    border = "3px solid #cc1016" if r["matched"] else "1px solid #e0e0e0"
-                    st.markdown(f'<div style="border:{border};border-radius:6px;padding:2px;margin-bottom:8px;">', unsafe_allow_html=True)
-                    st.image(r["thumb"], caption=f"{r['paper']} p{r['page']}", use_container_width=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+      document.getElementById("share_{
