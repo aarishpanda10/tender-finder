@@ -170,18 +170,62 @@ def fetch_dharitri_pages(d: date, edition_tuple, max_pages: int = 40):
     return [(i, url) for i, url in enumerate(ordered_urls[:max_pages], start=1)]
 
 # ----------------------------------------------------------------------
-# PRAMEYA: not wired up. Its reader uses a tile-based zoomable image
-# viewer (like a map viewer) rather than one plain image per page, so
-# this needs a different approach — see README.
+# PRAMEYA: EXPERIMENTAL. This one is different from the other three —
+# I could not verify it against the live site (my dev environment can't
+# make live network calls), so treat it as best-effort. It's restricted
+# to TODAY's Bhubaneswar edition only, since there's no confirmed way
+# (yet) to look up past edition IDs the way Dharitri allows. If the
+# pattern is wrong, this simply returns no pages rather than breaking
+# anything else in the app.
 # ----------------------------------------------------------------------
-def fetch_prameya_pages(d, edition_code):
-    return []
+PRAMEYA_EDITIONS = {"Bhubaneswar": "bhubaneswar"}
+
+def fetch_prameya_pages(d: date, edition_code: str, max_pages: int = 40):
+    if d != date.today():
+        return []  # experimental support only covers today's edition right now
+    session = requests.Session()
+    try:
+        home = session.get("https://www.prameyaepaper.com/", timeout=15)
+    except requests.RequestException:
+        return []
+    if home.status_code != 200:
+        return []
+
+    eid_match = re.search(r"/edition/(\d+)/" + re.escape(edition_code), home.text, re.I)
+    if not eid_match:
+        eid_match = re.search(r"FilesUpload/\d+/\d+/\d+/(\d+)_1_", home.text)
+    if not eid_match:
+        return []
+    eid = eid_match.group(1)
+
+    try:
+        edition_resp = session.get(f"https://www.prameyaepaper.com/edition/{eid}/{edition_code}", timeout=20)
+    except requests.RequestException:
+        return []
+    if edition_resp.status_code != 200:
+        return []
+
+    urls = re.findall(
+        r'(?:data-src|src)="(https://img\.prameyaepaper\.com/FilesUpload/[^"]+?\.(?:webp|jpg|jpeg|png))"',
+        edition_resp.text,
+        re.I,
+    )
+    seen, ordered = set(), []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            ordered.append(u)
+
+    out = []
+    for i, url in enumerate(ordered[:max_pages], start=1):
+        out.append((i, url))
+    return out
 
 PAPERS = {
     "Samaja":   {"editions": SAMAJA_EDITIONS,   "fetch": fetch_samaja_pages,   "ready": True},
     "Sambad":   {"editions": SAMBAD_EDITIONS,   "fetch": fetch_sambad_pages,   "ready": True},
     "Dharitri": {"editions": DHARITRI_EDITIONS, "fetch": fetch_dharitri_pages, "ready": True},
-    "Prameya":  {"editions": {},                "fetch": fetch_prameya_pages,  "ready": False},
+    "Prameya":  {"editions": PRAMEYA_EDITIONS,  "fetch": fetch_prameya_pages,  "ready": True, "experimental": True},
 }
 
 # Union of all city names across papers, for one shared dropdown.
@@ -190,6 +234,7 @@ for _info in PAPERS.values():
     for _city in _info["editions"]:
         if _city not in ALL_CITIES:
             ALL_CITIES.append(_city)
+
 
 # ----------------------------------------------------------------------
 # OCR pipeline — optimised for speed
@@ -402,6 +447,16 @@ edition_choice = st.selectbox("Edition (city)", options=ALL_CITIES, index=0)
 not_ready = [p for p in selected_papers if not PAPERS[p]["ready"]]
 if not_ready:
     st.warning(f"{', '.join(not_ready)} isn't connected yet.")
+
+experimental = [p for p in selected_papers if PAPERS[p].get("experimental")]
+if experimental:
+    st.warning(
+        f"⚠️ {', '.join(experimental)} is experimental — I couldn't verify it against the live "
+        f"site before shipping it. It only supports **today's date**, Bhubaneswar edition, and may "
+        f"return zero pages if the site's structure differs from what was assumed. The other papers "
+        f"are unaffected either way."
+    )
+
 skipped_for_city = [
     p for p in selected_papers
     if PAPERS[p]["ready"] and edition_choice not in PAPERS[p]["editions"]
